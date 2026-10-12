@@ -1,9 +1,10 @@
 import React from 'react';
-import { BarChart2, PieChart, TrendingUp, AlertTriangle, MapPin, Sparkles } from 'lucide-react';
+import { BarChart2, PieChart, TrendingUp, MapPin, Sparkles } from 'lucide-react';
 import { useApp } from '../../context/AppContext';
 
 export const AuthorityAnalytics = () => {
   const { complaints } = useApp();
+  const chartDenominator = Math.max(complaints.length, 1);
 
   // Compute category breakdown
   const categoryCounts = {
@@ -20,12 +21,20 @@ export const AuthorityAnalytics = () => {
     Resolved: complaints.filter(c => c.status === 'Resolved').length
   };
 
-  const hotSpots = [
-    { area: "Main Road", count: 342, topIssue: "Pothole & Lighting", risk: "HIGH" },
-    { area: "Market Area", count: 289, topIssue: "Garbage Overflow & Drainage", risk: "HIGH" },
-    { area: "Bus Stand", count: 194, topIssue: "Water Leakage & Traffic Obstruction", risk: "MEDIUM" },
-    { area: "College Road", count: 145, topIssue: "Broken Streetlamp Stretch", risk: "MEDIUM" }
-  ];
+  const hotSpots = Object.values(complaints.reduce((areas, complaint) => {
+    const area = complaint.location.split(',')[0].trim() || 'Unspecified location';
+    if (!areas[area]) areas[area] = { area, count: 0, categories: {} };
+    areas[area].count += 1;
+    areas[area].categories[complaint.category] = (areas[area].categories[complaint.category] || 0) + 1;
+    return areas;
+  }, {}))
+    .map((area) => ({
+      ...area,
+      topIssue: Object.entries(area.categories).sort((first, second) => second[1] - first[1])[0]?.[0] || 'No reports',
+      risk: area.count >= 5 ? 'HIGH' : area.count >= 2 ? 'MEDIUM' : 'LOW'
+    }))
+    .sort((first, second) => second.count - first.count)
+    .slice(0, 4);
 
   return (
     <div className="space-y-8 pb-16">
@@ -44,7 +53,7 @@ export const AuthorityAnalytics = () => {
         </div>
 
         <div className="px-4 py-2 rounded-2xl bg-slate-900 text-white text-xs font-mono font-bold self-start md:self-auto shadow">
-          Data Engine: Active
+          Live complaint data
         </div>
       </div>
 
@@ -65,7 +74,7 @@ export const AuthorityAnalytics = () => {
                 <span className="text-sky-700 font-bold">{categoryCounts.Pothole}</span>
               </div>
               <div className="w-full h-2 bg-slate-100 rounded-full overflow-hidden">
-                <div className="h-full bg-sky-500 rounded-full" style={{ width: `${(categoryCounts.Pothole / complaints.length) * 100}%` }} />
+                <div className="h-full bg-sky-500 rounded-full" style={{ width: `${(categoryCounts.Pothole / chartDenominator) * 100}%` }} />
               </div>
             </div>
 
@@ -75,7 +84,7 @@ export const AuthorityAnalytics = () => {
                 <span className="text-amber-700 font-bold">{categoryCounts.Garbage}</span>
               </div>
               <div className="w-full h-2 bg-slate-100 rounded-full overflow-hidden">
-                <div className="h-full bg-amber-500 rounded-full" style={{ width: `${(categoryCounts.Garbage / complaints.length) * 100}%` }} />
+                <div className="h-full bg-amber-500 rounded-full" style={{ width: `${(categoryCounts.Garbage / chartDenominator) * 100}%` }} />
               </div>
             </div>
 
@@ -85,7 +94,7 @@ export const AuthorityAnalytics = () => {
                 <span className="text-indigo-700 font-bold">{categoryCounts.Streetlight}</span>
               </div>
               <div className="w-full h-2 bg-slate-100 rounded-full overflow-hidden">
-                <div className="h-full bg-indigo-500 rounded-full" style={{ width: `${(categoryCounts.Streetlight / complaints.length) * 100}%` }} />
+                <div className="h-full bg-indigo-500 rounded-full" style={{ width: `${(categoryCounts.Streetlight / chartDenominator) * 100}%` }} />
               </div>
             </div>
 
@@ -95,7 +104,7 @@ export const AuthorityAnalytics = () => {
                 <span className="text-cyan-700 font-bold">{categoryCounts.Water + categoryCounts.Drainage}</span>
               </div>
               <div className="w-full h-2 bg-slate-100 rounded-full overflow-hidden">
-                <div className="h-full bg-cyan-500 rounded-full" style={{ width: `${((categoryCounts.Water + categoryCounts.Drainage) / complaints.length) * 100}%` }} />
+                <div className="h-full bg-cyan-500 rounded-full" style={{ width: `${((categoryCounts.Water + categoryCounts.Drainage) / chartDenominator) * 100}%` }} />
               </div>
             </div>
           </div>
@@ -115,7 +124,7 @@ export const AuthorityAnalytics = () => {
                 <div className="text-xl font-black text-amber-900">{statusCounts.Pending}</div>
               </div>
               <span className="text-xs font-bold text-amber-800 bg-amber-200/60 px-2.5 py-1 rounded-full">
-                {Math.round((statusCounts.Pending / complaints.length) * 100)}%
+                {Math.round((statusCounts.Pending / chartDenominator) * 100)}%
               </span>
             </div>
 
@@ -125,7 +134,7 @@ export const AuthorityAnalytics = () => {
                 <div className="text-xl font-black text-sky-900">{statusCounts.InProgress}</div>
               </div>
               <span className="text-xs font-bold text-sky-800 bg-sky-200/60 px-2.5 py-1 rounded-full">
-                {Math.round((statusCounts.InProgress / complaints.length) * 100)}%
+                {Math.round((statusCounts.InProgress / chartDenominator) * 100)}%
               </span>
             </div>
 
@@ -135,7 +144,7 @@ export const AuthorityAnalytics = () => {
                 <div className="text-xl font-black text-emerald-900">{statusCounts.Resolved}</div>
               </div>
               <span className="text-xs font-bold text-emerald-800 bg-emerald-200/60 px-2.5 py-1 rounded-full">
-                {Math.round((statusCounts.Resolved / complaints.length) * 100)}%
+                {Math.round((statusCounts.Resolved / chartDenominator) * 100)}%
               </span>
             </div>
           </div>
@@ -144,26 +153,28 @@ export const AuthorityAnalytics = () => {
         {/* Resolution Efficiency Metric */}
         <div className="p-6 rounded-3xl bg-slate-900 text-white border border-slate-800 shadow-xl space-y-4">
           <div className="flex items-center gap-2 text-amber-400 text-xs font-bold uppercase">
-            <Sparkles className="w-4 h-4" /> AI Performance Index
+            <Sparkles className="w-4 h-4" /> Resolution Overview
           </div>
 
           <div className="space-y-1">
-            <div className="text-4xl font-black text-white">98.4%</div>
-            <p className="text-xs text-slate-400">Resolution SLA compliance rate across municipal departments.</p>
+            <div className="text-4xl font-black text-white">
+              {complaints.length ? `${Math.round((statusCounts.Resolved / complaints.length) * 100)}%` : '—'}
+            </div>
+            <p className="text-xs text-slate-400">Share of CivicEye complaints resolved to date.</p>
           </div>
 
           <div className="pt-4 border-t border-slate-800 space-y-2 text-xs">
             <div className="flex justify-between">
-              <span className="text-slate-400">Avg Time to Assign:</span>
-              <span className="font-bold text-sky-400">18 minutes</span>
+              <span className="text-slate-400">Total reports:</span>
+              <span className="font-bold text-sky-400">{complaints.length}</span>
             </div>
             <div className="flex justify-between">
-              <span className="text-slate-400">Avg Field Fix Time:</span>
-              <span className="font-bold text-emerald-400">14.2 hours</span>
+              <span className="text-slate-400">Assigned or in progress:</span>
+              <span className="font-bold text-emerald-400">{statusCounts.InProgress}</span>
             </div>
             <div className="flex justify-between">
-              <span className="text-slate-400">Duplicate Prevention:</span>
-              <span className="font-bold text-amber-400">312 duplicate work orders saved</span>
+              <span className="text-slate-400">Reports with similar issues:</span>
+              <span className="font-bold text-amber-400">{complaints.filter((complaint) => complaint.duplicateCount > 0).length}</span>
             </div>
           </div>
         </div>
@@ -177,16 +188,21 @@ export const AuthorityAnalytics = () => {
           <p className="text-xs text-slate-500">Geospatial zones with high frequency civic infrastructure complaints.</p>
         </div>
 
+        {hotSpots.length === 0 ? (
+          <p className="rounded-2xl border border-dashed border-slate-300 bg-slate-50 p-8 text-center text-sm text-slate-500">
+            Hotspots will appear here as reports are submitted.
+          </p>
+        ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          {hotSpots.map((hs, idx) => (
-            <div key={idx} className="p-5 rounded-2xl bg-slate-50 border border-slate-200 space-y-3">
+          {hotSpots.map((hs) => (
+            <div key={hs.area} className="p-5 rounded-2xl bg-slate-50 border border-slate-200 space-y-3">
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2">
                   <MapPin className="w-4 h-4 text-rose-600" />
                   <h4 className="font-extrabold text-sm text-slate-900">{hs.area}</h4>
                 </div>
                 <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
-                  hs.risk === 'HIGH' ? 'bg-rose-100 text-rose-800 border border-rose-300' : 'bg-amber-100 text-amber-800 border border-amber-300'
+                  hs.risk === 'HIGH' ? 'bg-rose-100 text-rose-800 border border-rose-300' : hs.risk === 'MEDIUM' ? 'bg-amber-100 text-amber-800 border border-amber-300' : 'bg-emerald-100 text-emerald-800 border border-emerald-300'
                 }`}>
                   {hs.risk} RECURRENCE RISK
                 </span>
@@ -203,6 +219,7 @@ export const AuthorityAnalytics = () => {
             </div>
           ))}
         </div>
+        )}
       </div>
 
     </div>

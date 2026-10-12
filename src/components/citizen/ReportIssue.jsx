@@ -57,24 +57,26 @@ export const ReportIssue = () => {
     setShowAIModal(true);
   };
 
-  const handleFinalSubmit = (geminiData = {}) => {
+  const handleFinalSubmit = async (geminiData = {}) => {
     setShowAIModal(false);
     
     const finalCategory = geminiData.category || (category === 'Auto Detect' ? selectedPreset.category : category);
 
-    const newComp = submitNewComplaint({
-      category: finalCategory,
-      imageUrl: photoUrl,
-      resolutionImageUrl: selectedPreset.resolutionImageUrl || MOCK_IMAGES.pothole_after,
-      location: location,
-      description: geminiData.explanation ? `${description} (${geminiData.explanation})` : description,
-      severity: geminiData.severity || selectedPreset.severity || 'High',
-      confidence: geminiData.confidence || selectedPreset.confidence || 94,
-      duplicateCount: selectedPreset.duplicates || 3,
-      publicImpact: selectedPreset.publicImpact || 'High'
-    });
-
-    setSubmittedComplaint(newComp);
+    try {
+      const newComp = await submitNewComplaint({
+        category: finalCategory,
+        imageUrl: photoUrl,
+        resolutionImageUrl: selectedPreset.resolutionImageUrl || MOCK_IMAGES.pothole_after,
+        location,
+        description: geminiData.explanation ? `${description} (${geminiData.explanation})` : description,
+        severity: geminiData.severity || selectedPreset.severity || 'High',
+        confidence: geminiData.confidence || selectedPreset.confidence || 94,
+        publicImpact: selectedPreset.publicImpact || 'High'
+      });
+      setSubmittedComplaint(newComp);
+    } catch (error) {
+      showToast(error.message || 'We could not save your complaint. Please try again.', 'error');
+    }
   };
 
   return (

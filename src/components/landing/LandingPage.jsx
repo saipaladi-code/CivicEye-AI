@@ -1,9 +1,9 @@
 import React from 'react';
-import { Camera, Cpu, Layers, CheckCircle2, ArrowRight, ShieldCheck, UserCheck, Sparkles, MapPin, Zap } from 'lucide-react';
+import { Camera, Cpu, Layers, CheckCircle2, ArrowRight, ShieldCheck, Sparkles, MapPin, Zap } from 'lucide-react';
 import { useApp } from '../../context/AppContext';
 
 export const LandingPage = () => {
-  const { setRole, setActiveTab } = useApp();
+  const { setActiveTab } = useApp();
 
   return (
     <div className="space-y-16 pb-16">
@@ -36,43 +36,19 @@ export const LandingPage = () => {
 
             <div className="pt-4 flex flex-col sm:flex-row items-center justify-center lg:justify-start gap-4">
               <button
-                onClick={() => {
-                  setRole('citizen');
-                  setActiveTab('report-issue');
-                }}
+                onClick={() => setActiveTab('auth-signup')}
                 className="w-full sm:w-auto px-8 py-4 rounded-2xl bg-gradient-to-r from-sky-500 to-cyan-500 hover:from-sky-400 hover:to-cyan-400 text-slate-950 font-extrabold text-base shadow-xl shadow-sky-500/25 flex items-center justify-center gap-3 transition transform hover:-translate-y-0.5"
               >
                 <Camera className="w-5 h-5" />
-                Report an Issue
+                Create a Citizen Account
               </button>
 
               <button
-                onClick={() => {
-                  setRole('authority');
-                  setActiveTab('authority-dashboard');
-                }}
+                onClick={() => setActiveTab('auth-authority')}
                 className="w-full sm:w-auto px-8 py-4 rounded-2xl bg-slate-800 hover:bg-slate-700 text-white font-bold text-base border border-slate-700 flex items-center justify-center gap-3 transition"
               >
                 <ShieldCheck className="w-5 h-5 text-amber-400" />
-                Authority Dashboard
-              </button>
-            </div>
-
-            {/* Quick Demo Switcher Prompt */}
-            <div className="pt-6 border-t border-slate-800/80 flex items-center justify-center lg:justify-start gap-4 text-xs text-slate-400">
-              <span className="font-semibold text-slate-300">Quick Demo Access:</span>
-              <button
-                onClick={() => { setRole('citizen'); setActiveTab('citizen-dashboard'); }}
-                className="hover:text-sky-300 underline font-medium flex items-center gap-1"
-              >
-                <UserCheck className="w-3.5 h-3.5" /> Continue as Citizen
-              </button>
-              <span>•</span>
-              <button
-                onClick={() => { setRole('authority'); setActiveTab('authority-dashboard'); }}
-                className="hover:text-amber-300 underline font-medium flex items-center gap-1"
-              >
-                <ShieldCheck className="w-3.5 h-3.5 text-amber-400" /> Continue as Authority
+                Authority Sign In
               </button>
             </div>
           </div>
@@ -244,13 +220,10 @@ export const LandingPage = () => {
 
           <div className="text-center pt-4">
             <button
-              onClick={() => {
-                setRole('citizen');
-                setActiveTab('report-issue');
-              }}
+              onClick={() => setActiveTab('auth-signup')}
               className="inline-flex items-center gap-2 text-sky-400 hover:text-sky-300 font-bold text-sm hover:underline"
             >
-              <span>Try the Live Interactive Demo Flow</span>
+              <span>Create an account to get started</span>
               <ArrowRight className="w-4 h-4" />
             </button>
           </div>

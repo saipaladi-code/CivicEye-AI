@@ -1,168 +1,144 @@
 import React, { useState } from 'react';
-import { Eye, Bell, UserCheck, ShieldCheck, Menu, X, LayoutDashboard, FileText, CheckCircle2, BarChart2, PlusCircle, ShieldAlert } from 'lucide-react';
+import {
+  ArrowRight, BarChart2, Bell, CheckCircle2, Eye, FileText, LayoutDashboard,
+  LogOut, Menu, PlusCircle, ShieldAlert, UserRound, X
+} from 'lucide-react';
 import { useApp } from '../../context/AppContext';
 
 export const Navbar = ({ onOpenNotifications }) => {
-  const { role, setRole, activeTab, setActiveTab, notifications } = useApp();
+  const {
+    user, role, activeTab, setActiveTab, notifications, logout, showToast
+  } = useApp();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
-
-  const unreadCount = notifications.filter(n => !n.read).length;
-
+  const unreadCount = notifications.filter((notification) => !notification.read).length;
   const citizenNav = [
-    { id: 'landing', label: 'Home' },
     { id: 'citizen-dashboard', label: 'Dashboard', icon: LayoutDashboard },
-    { id: 'report-issue', label: 'Report Issue', icon: PlusCircle },
-    { id: 'my-reports', label: 'My Reports', icon: FileText },
-    { id: 'tracking', label: 'Complaint Tracking', icon: CheckCircle2 }
+    { id: 'report-issue', label: 'Report issue', icon: PlusCircle },
+    { id: 'my-reports', label: 'My reports', icon: FileText },
+    { id: 'tracking', label: 'Tracking', icon: CheckCircle2 }
   ];
-
   const authorityNav = [
-    { id: 'authority-dashboard', label: 'Authority Overview', icon: LayoutDashboard },
-    { id: 'issue-management', label: 'Issues Management', icon: ShieldAlert },
+    { id: 'authority-dashboard', label: 'Overview', icon: LayoutDashboard },
+    { id: 'issue-management', label: 'Manage issues', icon: ShieldAlert },
     { id: 'authority-analytics', label: 'Analytics', icon: BarChart2 }
   ];
+  const navigation = user ? (role === 'authority' ? authorityNav : citizenNav) : [];
 
-  const currentNav = role === 'citizen' ? citizenNav : authorityNav;
+  const handleLogout = async () => {
+    try {
+      await logout();
+      showToast('You have been securely signed out.', 'success');
+    } catch (error) {
+      showToast(error.message || 'Sign out failed. Please try again.', 'error');
+    }
+  };
+
+  const renderLinks = (mobile = false) => navigation.map((item) => {
+    const Icon = item.icon;
+    const selected = activeTab === item.id;
+    return (
+      <button
+        key={item.id}
+        type="button"
+        onClick={() => {
+          setActiveTab(item.id);
+          setMobileMenuOpen(false);
+        }}
+        className={`${mobile ? 'w-full justify-start px-4 py-2.5' : 'px-3 py-2'} inline-flex items-center gap-2 rounded-xl text-xs font-semibold transition ${
+          selected
+            ? 'bg-emerald-50 text-emerald-800'
+            : 'text-slate-600 hover:bg-emerald-50/70 hover:text-emerald-800'
+        }`}
+      >
+        <Icon className="h-4 w-4" />
+        {item.label}
+      </button>
+    );
+  });
 
   return (
-    <header className="sticky top-0 z-40 bg-slate-900/95 border-b border-slate-800 text-white backdrop-blur-md shadow-lg">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div className="flex items-center justify-between h-16">
-          
-          {/* Logo & Tagline */}
-          <div
-            onClick={() => setActiveTab(role === 'citizen' ? 'landing' : 'authority-dashboard')}
-            className="flex items-center gap-3 cursor-pointer group"
-          >
-            <div className="w-10 h-10 rounded-xl bg-gradient-to-tr from-sky-500 to-cyan-400 flex items-center justify-center shadow-lg shadow-sky-500/20 group-hover:scale-105 transition transform">
-              <Eye className="w-6 h-6 text-slate-950 font-bold" />
-            </div>
-            <div>
-              <div className="flex items-center gap-2">
-                <span className="font-extrabold text-lg tracking-tight bg-gradient-to-r from-white via-sky-100 to-sky-400 bg-clip-text text-transparent">
-                  CivicEye AI
-                </span>
-                <span className={`text-[10px] uppercase tracking-wider font-extrabold px-2 py-0.5 rounded-full border ${
-                  role === 'authority'
-                    ? 'bg-amber-500/20 text-amber-300 border-amber-500/40'
-                    : 'bg-sky-500/20 text-sky-300 border-sky-500/40'
-                }`}>
-                  {role}
-                </span>
-              </div>
-              <p className="text-[10px] text-slate-400 font-medium hidden sm:block">
-                Intelligent Civic Detection Platform
-              </p>
-            </div>
-          </div>
+    <header className="sticky top-0 z-40 border-b border-emerald-950/10 bg-white/95 text-slate-800 shadow-sm backdrop-blur-md">
+      <div className="mx-auto flex min-h-[72px] max-w-7xl items-center justify-between gap-4 px-4 sm:px-6 lg:px-8">
+        <button
+          type="button"
+          onClick={() => setActiveTab(user ? (role === 'authority' ? 'authority-dashboard' : 'citizen-dashboard') : 'landing')}
+          className="flex shrink-0 items-center gap-3 rounded-lg text-left focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-emerald-700"
+          aria-label="CivicEye AI home"
+        >
+          <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-emerald-800 text-white shadow-md shadow-emerald-900/15">
+            <Eye className="h-6 w-6" />
+          </span>
+          <span>
+            <span className="block text-base font-extrabold tracking-tight text-emerald-950">CivicEye AI</span>
+            <span className="hidden text-[10px] font-semibold uppercase tracking-[.12em] text-emerald-800/60 sm:block">Intelligent civic platform</span>
+          </span>
+        </button>
 
-          {/* Desktop Navigation Links */}
-          <nav className="hidden md:flex items-center gap-1">
-            {currentNav.map((link) => {
-              const Icon = link.icon;
-              const isActive = activeTab === link.id;
-              return (
-                <button
-                  key={link.id}
-                  onClick={() => setActiveTab(link.id)}
-                  className={`px-3.5 py-2 rounded-xl text-xs font-semibold flex items-center gap-2 transition ${
-                    isActive
-                      ? 'bg-sky-500/20 text-sky-300 border border-sky-400/30'
-                      : 'text-slate-300 hover:text-white hover:bg-slate-800'
-                  }`}
-                >
-                  {Icon && <Icon className="w-4 h-4" />}
-                  <span>{link.label}</span>
-                </button>
-              );
-            })}
+        {user && (
+          <nav className="hidden items-center gap-1 lg:flex" aria-label="Main navigation">
+            {renderLinks()}
           </nav>
+        )}
 
-          {/* Right Action Controls */}
-          <div className="flex items-center gap-3">
-            
-            {/* Demo Role Switcher Button */}
-            <div className="bg-slate-800 p-1 rounded-xl border border-slate-700/60 flex items-center gap-1 text-xs font-medium">
+        <div className="flex shrink-0 items-center gap-2">
+          {user ? (
+            <>
+              <span className="hidden items-center gap-2 rounded-xl bg-emerald-50 px-3 py-2 text-xs font-semibold text-emerald-900 sm:flex">
+                <UserRound className="h-4 w-4" />
+                {user.fullName}
+                <span className="rounded-md bg-white px-1.5 py-1 text-[9px] uppercase tracking-wide text-emerald-700">{role}</span>
+              </span>
               <button
-                onClick={() => {
-                  setRole('citizen');
-                  setActiveTab('citizen-dashboard');
-                }}
-                className={`px-2.5 py-1.5 rounded-lg flex items-center gap-1.5 transition ${
-                  role === 'citizen'
-                    ? 'bg-sky-600 text-white font-bold shadow'
-                    : 'text-slate-400 hover:text-white'
-                }`}
+                type="button"
+                onClick={onOpenNotifications}
+                className="relative rounded-xl p-2.5 text-slate-600 transition hover:bg-emerald-50 hover:text-emerald-800"
+                aria-label={`Notifications${unreadCount ? `, ${unreadCount} unread` : ''}`}
               >
-                <UserCheck className="w-3.5 h-3.5" />
-                <span className="hidden sm:inline">Citizen</span>
+                <Bell className="h-4 w-4" />
+                {unreadCount > 0 && <span className="absolute right-1 top-1 h-2 w-2 rounded-full bg-rose-500" />}
               </button>
-
               <button
-                onClick={() => {
-                  setRole('authority');
-                  setActiveTab('authority-dashboard');
-                }}
-                className={`px-2.5 py-1.5 rounded-lg flex items-center gap-1.5 transition ${
-                  role === 'authority'
-                    ? 'bg-amber-600 text-white font-bold shadow'
-                    : 'text-slate-400 hover:text-white'
-                }`}
+                type="button"
+                onClick={handleLogout}
+                className="hidden items-center gap-2 rounded-xl border border-emerald-900/10 px-3 py-2 text-xs font-bold text-emerald-900 transition hover:bg-emerald-50 sm:inline-flex"
               >
-                <ShieldCheck className="w-3.5 h-3.5" />
-                <span className="hidden sm:inline">Authority</span>
+                <LogOut className="h-4 w-4" /> Sign out
               </button>
-            </div>
-
-            {/* Notification Bell */}
+              <button
+                type="button"
+                onClick={() => setMobileMenuOpen((open) => !open)}
+                className="rounded-xl p-2 text-slate-600 transition hover:bg-emerald-50 lg:hidden"
+                aria-label={mobileMenuOpen ? 'Close navigation' : 'Open navigation'}
+                aria-expanded={mobileMenuOpen}
+              >
+                {mobileMenuOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
+              </button>
+            </>
+          ) : (
             <button
-              onClick={onOpenNotifications}
-              className="relative p-2 rounded-xl bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-300 hover:text-white transition"
-              title="Notifications"
+              type="button"
+              onClick={() => setActiveTab('auth-login')}
+              className="inline-flex items-center gap-2 rounded-xl bg-emerald-800 px-4 py-2.5 text-sm font-bold text-white transition hover:bg-emerald-900 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-emerald-700"
             >
-              <Bell className="w-4 h-4" />
-              {unreadCount > 0 && (
-                <span className="absolute -top-1 -right-1 w-4 h-4 rounded-full bg-rose-500 text-white text-[10px] font-bold flex items-center justify-center animate-pulse">
-                  {unreadCount}
-                </span>
-              )}
+              Sign in <ArrowRight className="h-4 w-4" />
             </button>
-
-            {/* Mobile Menu Button */}
-            <button
-              onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
-              className="md:hidden p-2 rounded-xl bg-slate-800 text-slate-300 hover:text-white"
-            >
-              {mobileMenuOpen ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
-            </button>
-          </div>
+          )}
         </div>
       </div>
 
-      {/* Mobile Navigation Drawer */}
-      {mobileMenuOpen && (
-        <div className="md:hidden bg-slate-900 border-b border-slate-800 px-4 pt-2 pb-4 space-y-2">
-          {currentNav.map((link) => {
-            const Icon = link.icon;
-            const isActive = activeTab === link.id;
-            return (
-              <button
-                key={link.id}
-                onClick={() => {
-                  setActiveTab(link.id);
-                  setMobileMenuOpen(false);
-                }}
-                className={`w-full px-4 py-2.5 rounded-xl text-sm font-semibold flex items-center gap-3 transition ${
-                  isActive
-                    ? 'bg-sky-500/20 text-sky-300 border border-sky-400/30'
-                    : 'text-slate-300 hover:bg-slate-800'
-                }`}
-              >
-                {Icon && <Icon className="w-4 h-4 text-sky-400" />}
-                <span>{link.label}</span>
-              </button>
-            );
-          })}
+      {user && mobileMenuOpen && (
+        <div className="space-y-1 border-t border-emerald-950/10 bg-white px-4 py-3 lg:hidden">
+          <div className="px-4 pb-2 text-xs font-semibold text-slate-500 sm:hidden">
+            {user.fullName} · {role}
+          </div>
+          {renderLinks(true)}
+          <button
+            type="button"
+            onClick={handleLogout}
+            className="inline-flex w-full items-center gap-2 rounded-xl px-4 py-2.5 text-left text-xs font-semibold text-emerald-900 hover:bg-emerald-50 sm:hidden"
+          >
+            <LogOut className="h-4 w-4" /> Sign out
+          </button>
         </div>
       )}
     </header>

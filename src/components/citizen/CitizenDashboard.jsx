@@ -91,7 +91,7 @@ export const CitizenDashboard = () => {
             <p className="text-xs text-slate-500">Live spatial view of reported issues and AI priority markers.</p>
           </div>
           <span className="text-xs font-semibold text-sky-600 bg-sky-50 px-3 py-1 rounded-full border border-sky-200">
-            OpenStreetMap Integrated
+            Live Civic Issue Map
           </span>
         </div>
 

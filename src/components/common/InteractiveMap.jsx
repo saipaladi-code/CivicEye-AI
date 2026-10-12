@@ -12,8 +12,9 @@ export const InteractiveMap = ({ complaints = [], onSelectComplaint, activeId, h
         // Default center on sample coordinates (Bangalore smart city grid coordinates)
         const map = window.L.map(mapContainerRef.current).setView([12.972, 77.595], 13);
         
-        window.L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-          attribution: '&copy; OpenStreetMap contributors | CivicEye AI'
+        window.L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Street_Map/MapServer/tile/{z}/{y}/{x}', {
+          attribution: 'Tiles &copy; Esri &mdash; Esri, HERE, Garmin, &copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors, and the GIS user community',
+          maxZoom: 19
         }).addTo(map);
 
         leafletMapRef.current = map;

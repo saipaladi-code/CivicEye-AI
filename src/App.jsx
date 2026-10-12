@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { AppProvider, useApp } from './context/AppContext';
 import { Navbar } from './components/navbar/Navbar';
 import { LandingPage } from './components/landing/LandingPage';
@@ -10,13 +10,33 @@ import { AuthorityDashboard } from './components/authority/AuthorityDashboard';
 import { IssueManagement } from './components/authority/IssueManagement';
 import { AuthorityAnalytics } from './components/authority/AuthorityAnalytics';
 import { NotificationDrawer } from './components/common/NotificationDrawer';
-import { DemoGuideWidget } from './components/common/DemoGuideWidget';
 import { Toast } from './components/common/Toast';
-import { Eye, ShieldCheck, Heart } from 'lucide-react';
+import { AuthPage } from './components/auth/AuthPage';
+import { Eye } from 'lucide-react';
 
 const MainContent = () => {
-  const { activeTab, role } = useApp();
+  const { activeTab, user, authLoading, dataLoading, setActiveTab } = useApp();
   const [notifDrawerOpen, setNotifDrawerOpen] = useState(false);
+  const authRoute = activeTab.startsWith('auth-');
+  const protectedRoute = !authRoute && activeTab !== 'landing';
+  const authorityRoute = ['authority-dashboard', 'issue-management', 'authority-analytics'].includes(activeTab);
+  const roleMismatch = user && protectedRoute && (authorityRoute !== (user.role === 'authority'));
+  const homeTab = user?.role === 'authority' ? 'authority-dashboard' : 'citizen-dashboard';
+
+  useEffect(() => {
+    if (user && (authRoute || roleMismatch)) setActiveTab(homeTab);
+  }, [user, authRoute, roleMismatch, homeTab, setActiveTab]);
+
+  if (authRoute && !user) {
+    return <AuthPage defaultAccountType={activeTab === 'auth-authority' ? 'authority' : 'citizen'} />;
+  }
+
+  if (protectedRoute && (authLoading || dataLoading || !user || roleMismatch)) {
+    if (authLoading || dataLoading || roleMismatch) {
+      return <div className="flex min-h-screen items-center justify-center text-sm font-semibold text-emerald-900">Loading your secure CivicEye session…</div>;
+    }
+    return <AuthPage blockedAccess />;
+  }
 
   return (
     <div className="min-h-screen flex flex-col bg-slate-50 text-slate-800">
@@ -63,9 +83,6 @@ const MainContent = () => {
         isOpen={notifDrawerOpen}
         onClose={() => setNotifDrawerOpen(false)}
       />
-
-      {/* Floating Interactive Demo Controller */}
-      <DemoGuideWidget />
 
       {/* Global Toast System */}
       <Toast />
