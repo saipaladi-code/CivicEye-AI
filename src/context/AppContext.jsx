@@ -10,7 +10,7 @@ export const AppProvider = ({ children }) => {
   const [authLoading, setAuthLoading] = useState(true);
   const role = user?.role || 'citizen';
   const [activeTab, setActiveTab] = useState(() => (
-    new URLSearchParams(window.location.search).has('resetToken') ? 'auth-reset' : 'landing'
+    new URLSearchParams(window.location.search).has('resetToken') ? 'auth-reset' : 'auth-login'
   )); // Public landing, authentication, and protected dashboard tabs
   const [complaints, setComplaints] = useState([]);
   const [selectedComplaintId, setSelectedComplaintId] = useState(null);
@@ -40,7 +40,7 @@ export const AppProvider = ({ children }) => {
   const logout = async () => {
     await authRequest('logout', {});
     setUser(null);
-    setActiveTab('landing');
+    setActiveTab('auth-login');
   };
 
   // Toast Helper

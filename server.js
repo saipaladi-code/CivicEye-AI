@@ -641,10 +641,10 @@ app.use((error, _req, res, _next) => {
   });
 });
 
-if (isProduction) {
+if (isProduction && !process.env.VERCEL) {
   app.use(express.static(path.join(here, 'dist')));
   app.get('/{*splat}', (_req, res) => res.sendFile(path.join(here, 'dist', 'index.html')));
-} else {
+} else if (!process.env.VERCEL) {
   const { createServer: createViteServer } = await import('vite');
   const vite = await createViteServer({
     configFile: path.join(here, 'vite.config.js'),
@@ -654,6 +654,10 @@ if (isProduction) {
   app.use(vite.middlewares);
 }
 
-httpServer.listen(port, isProduction ? '0.0.0.0' : '127.0.0.1', () => {
-  console.log(`CivicEye is available at http://localhost:${port}`);
-});
+export default app;
+
+if (!process.env.VERCEL) {
+  httpServer.listen(port, isProduction ? '0.0.0.0' : '127.0.0.1', () => {
+    console.log(`CivicEye is available at http://localhost:${port}`);
+  });
+}
