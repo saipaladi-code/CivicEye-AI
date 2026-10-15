@@ -1,5 +1,5 @@
 import React from 'react';
-import { ShieldCheck, AlertOctagon, Clock, CheckCircle2, TrendingUp, ArrowRight, Eye, Layers } from 'lucide-react';
+import { ShieldCheck, AlertOctagon, Clock, CheckCircle2, TrendingUp, ArrowRight, Eye, Layers, ClipboardCheck } from 'lucide-react';
 import { useApp } from '../../context/AppContext';
 import { InteractiveMap } from '../common/InteractiveMap';
 
@@ -7,6 +7,9 @@ export const AuthorityDashboard = () => {
   const { complaints, setActiveTab, setSelectedComplaintId } = useApp();
 
   const urgentIssues = complaints.filter(c => c.priorityScore >= 70);
+  const pendingCount = complaints.filter((complaint) => ['Submitted', 'Verified'].includes(complaint.status)).length;
+  const inProgressCount = complaints.filter((complaint) => ['Assigned', 'In Progress', 'Evidence Submitted', 'Rework Required'].includes(complaint.status)).length;
+  const resolvedCount = complaints.filter((complaint) => complaint.status === 'Resolved').length;
 
   const handleOpenIssue = (id) => {
     setSelectedComplaintId(id);
@@ -27,12 +30,20 @@ export const AuthorityDashboard = () => {
           <p className="text-xs text-slate-300 mt-1">Real-time AI issue triage, department dispatch, priority queues, and resolution verification.</p>
         </div>
 
-        <button
-          onClick={() => setActiveTab('issue-management')}
-          className="px-6 py-3 rounded-2xl bg-amber-500 hover:bg-amber-400 text-slate-950 font-extrabold text-xs shadow-lg shadow-amber-500/20 flex items-center gap-2 shrink-0 self-start md:self-auto"
-        >
-          <Layers className="w-4 h-4" /> Manage Issue Queue
-        </button>
+        <div className="flex flex-wrap gap-2 self-start md:self-auto">
+          <button
+            onClick={() => setActiveTab('field-worker-applications')}
+            className="px-5 py-3 rounded-2xl bg-emerald-500 hover:bg-emerald-400 text-emerald-950 font-extrabold text-xs shadow-lg shadow-emerald-500/20 flex items-center gap-2"
+          >
+            <ClipboardCheck className="w-4 h-4" /> Field Worker Applications
+          </button>
+          <button
+            onClick={() => setActiveTab('issue-management')}
+            className="px-6 py-3 rounded-2xl bg-amber-500 hover:bg-amber-400 text-slate-950 font-extrabold text-xs shadow-lg shadow-amber-500/20 flex items-center gap-2"
+          >
+            <Layers className="w-4 h-4" /> Manage Issue Queue
+          </button>
+        </div>
       </div>
 
       {/* Authority Statistics Grid */}
@@ -40,31 +51,31 @@ export const AuthorityDashboard = () => {
         
         <div className="p-5 rounded-2xl bg-white border border-slate-200 shadow-sm space-y-1">
           <span className="text-[11px] font-bold text-slate-400 uppercase">Total Issues</span>
-          <div className="text-3xl font-black text-slate-900">1,248</div>
-          <div className="text-[10px] text-slate-500 font-medium">Logged citywide</div>
+          <div className="text-3xl font-black text-slate-900">{complaints.length}</div>
+          <div className="text-[10px] text-slate-500 font-medium">Loaded complaints</div>
         </div>
 
         <div className="p-5 rounded-2xl bg-rose-50/60 border border-rose-200 shadow-sm space-y-1">
           <span className="text-[11px] font-bold text-rose-600 uppercase">High Priority</span>
-          <div className="text-3xl font-black text-rose-700">86</div>
+          <div className="text-3xl font-black text-rose-700">{urgentIssues.length}</div>
           <div className="text-[10px] text-rose-600 font-bold">Score &ge; 70 (Urgent)</div>
         </div>
 
         <div className="p-5 rounded-2xl bg-amber-50/60 border border-amber-200 shadow-sm space-y-1">
           <span className="text-[11px] font-bold text-amber-700 uppercase">Pending</span>
-          <div className="text-3xl font-black text-amber-800">214</div>
+          <div className="text-3xl font-black text-amber-800">{pendingCount}</div>
           <div className="text-[10px] text-amber-700 font-medium">Awaiting dispatch</div>
         </div>
 
         <div className="p-5 rounded-2xl bg-sky-50/60 border border-sky-200 shadow-sm space-y-1">
           <span className="text-[11px] font-bold text-sky-700 uppercase">In Progress</span>
-          <div className="text-3xl font-black text-sky-800">172</div>
+          <div className="text-3xl font-black text-sky-800">{inProgressCount}</div>
           <div className="text-[10px] text-sky-700 font-medium">Crews deployed</div>
         </div>
 
         <div className="p-5 rounded-2xl bg-emerald-50/60 border border-emerald-200 shadow-sm space-y-1 col-span-2 lg:col-span-1">
           <span className="text-[11px] font-bold text-emerald-700 uppercase">Resolved</span>
-          <div className="text-3xl font-black text-emerald-800">862</div>
+          <div className="text-3xl font-black text-emerald-800">{resolvedCount}</div>
           <div className="text-[10px] text-emerald-700 font-bold">Verified fixes</div>
         </div>
 

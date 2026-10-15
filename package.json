@@ -9,9 +9,11 @@
     "start": "node server.js",
     "preview": "node -e \"process.env.NODE_ENV='production'; import('./server.js')\"",
     "db:setup": "node scripts/setup-auth-database.js",
-    "provision:authority": "node scripts/provision-authority.js"
+    "provision:authority": "node scripts/provision-authority.js",
+    "provision:worker": "node scripts/provision-authority.js --worker"
   },
   "dependencies": {
+    "@vercel/blob": "^2.0.0",
     "bcryptjs": "^3.0.3",
     "canvas-confetti": "^1.9.2",
     "cookie-parser": "^1.4.7",

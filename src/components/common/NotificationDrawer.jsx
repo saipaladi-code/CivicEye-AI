@@ -12,7 +12,9 @@ export const NotificationDrawer = ({ isOpen, onClose }) => {
   const handleNotificationClick = (complaintId) => {
     if (complaintId) {
       setSelectedComplaintId(complaintId);
-      setActiveTab(role === 'citizen' ? 'tracking' : 'issue-management');
+      setActiveTab(
+        role === 'citizen' ? 'tracking' : ['worker', 'field_worker'].includes(role) ? 'worker-dashboard' : 'issue-management'
+      );
       onClose();
     }
   };

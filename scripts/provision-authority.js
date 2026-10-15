@@ -3,6 +3,7 @@ import { stdin, stdout } from 'node:process';
 import { createInterface } from 'node:readline/promises';
 import bcrypt from 'bcryptjs';
 import { MongoClient } from 'mongodb';
+import { ensureAuthCollections } from '../db/authSchema.js';
 
 const askHidden = (prompt) => new Promise((resolve, reject) => {
   if (!stdin.isTTY || typeof stdin.setRawMode !== 'function') {
@@ -42,6 +43,8 @@ const askHidden = (prompt) => new Promise((resolve, reject) => {
 });
 
 const uri = process.env.MONGODB_URI;
+const role = process.argv.includes('--worker') ? 'worker' : 'authority';
+const roleLabel = role === 'worker' ? 'field worker' : 'municipal officer';
 if (!uri) {
   console.error('MONGODB_URI is not configured. Add it to the private server-side .env file first.');
   process.exit(1);
@@ -50,15 +53,23 @@ if (!uri) {
 const prompt = createInterface({ input: stdin, output: stdout });
 let fullName;
 let email;
+let department = '';
 try {
-  fullName = (await prompt.question('Approved municipal officer full name: ')).trim();
-  email = (await prompt.question('Approved municipal email address: ')).trim().toLowerCase();
+  fullName = (await prompt.question(`Approved ${roleLabel} full name: `)).trim();
+  email = (await prompt.question(`Approved ${roleLabel} email address: `)).trim().toLowerCase();
+  if (role === 'worker') {
+    department = (await prompt.question('Worker department: ')).trim();
+  }
 } finally {
   prompt.close();
 }
 
-if (fullName.length < 2 || fullName.length > 100 || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
-  console.error('Enter a valid full name and email address.');
+if (
+  fullName.length < 2 || fullName.length > 100 ||
+  !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) ||
+  (role === 'worker' && (!department || department.length > 100))
+) {
+  console.error(`Enter a valid full name, ${roleLabel} email, and department if required.`);
   process.exit(1);
 }
 
@@ -81,8 +92,16 @@ const client = new MongoClient(uri);
 try {
   await client.connect();
   const db = client.db(process.env.MONGODB_DB_NAME || 'civiceye');
+  await ensureAuthCollections(db);
   const users = db.collection('users');
-  await users.createIndex({ email: 1 }, { unique: true });
+  const emailIndex = (await users.listIndexes().toArray()).find((index) => (
+    Object.keys(index.key).length === 1 && index.key.email === 1
+  ));
+  if (!emailIndex) {
+    await users.createIndex({ email: 1 }, { name: 'email_1', unique: true });
+  } else if (!emailIndex.unique) {
+    throw new Error('The users email index must enforce unique email addresses.');
+  }
   await users.updateOne(
     { email },
     {
@@ -91,16 +110,19 @@ try {
         email,
         mobile: '',
         passwordHash: await bcrypt.hash(password, 12),
-        role: 'authority',
-        authorityApprovedAt: new Date()
+        role,
+        ...(role === 'authority'
+          ? { authorityApprovedAt: new Date() }
+          : { department })
       },
+      ...(role === 'authority' ? { $unset: { department: '' } } : {}),
       $setOnInsert: { createdAt: new Date() }
     },
     { upsert: true }
   );
-  console.log(`Authority account provisioned for ${email}.`);
+  console.log(`${roleLabel[0].toUpperCase()}${roleLabel.slice(1)} account provisioned for ${email}.`);
 } catch (error) {
-  console.error(`Could not provision the authority account (${error.name || 'Error'}). Check MongoDB configuration and access.`);
+  console.error(`Could not provision the ${roleLabel} account (${error.name || 'Error'}). Check MongoDB configuration and access.`);
   process.exitCode = 1;
 } finally {
   await client.close();

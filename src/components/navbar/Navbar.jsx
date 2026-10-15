@@ -20,9 +20,15 @@ export const Navbar = ({ onOpenNotifications }) => {
   const authorityNav = [
     { id: 'authority-dashboard', label: 'Overview', icon: LayoutDashboard },
     { id: 'issue-management', label: 'Manage issues', icon: ShieldAlert },
+    { id: 'field-worker-applications', label: 'Field Worker Applications', icon: UserRound },
     { id: 'authority-analytics', label: 'Analytics', icon: BarChart2 }
   ];
-  const navigation = user ? (role === 'authority' ? authorityNav : citizenNav) : [];
+  const workerNav = [
+    { id: 'worker-dashboard', label: 'My Tasks', icon: FileText }
+  ];
+  const navigation = user
+    ? role === 'authority' ? authorityNav : ['worker', 'field_worker'].includes(role) ? workerNav : citizenNav
+    : [];
 
   const handleLogout = async () => {
     try {
@@ -61,7 +67,9 @@ export const Navbar = ({ onOpenNotifications }) => {
       <div className="mx-auto flex min-h-[72px] max-w-7xl items-center justify-between gap-4 px-4 sm:px-6 lg:px-8">
         <button
           type="button"
-          onClick={() => setActiveTab(user ? (role === 'authority' ? 'authority-dashboard' : 'citizen-dashboard') : 'landing')}
+          onClick={() => setActiveTab(user
+            ? role === 'authority' ? 'authority-dashboard' : ['worker', 'field_worker'].includes(role) ? 'worker-dashboard' : 'citizen-dashboard'
+            : 'landing')}
           className="flex shrink-0 items-center gap-3 rounded-lg text-left focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-emerald-700"
           aria-label="CivicEye AI home"
         >

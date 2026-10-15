@@ -10,8 +10,26 @@ const authCollections = [
           email: { bsonType: 'string', pattern: '^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$' },
           mobile: { bsonType: 'string', maxLength: 30 },
           passwordHash: { bsonType: 'string', pattern: '^\\$2[aby]\\$\\d{2}\\$.{53}$' },
-          role: { enum: ['citizen', 'authority'] },
+          role: { enum: ['citizen', 'authority', 'worker', 'field_worker'] },
+          department: { bsonType: 'string', maxLength: 100 },
+          employeeId: { bsonType: 'string', maxLength: 80 },
+          workLocation: { bsonType: 'string', maxLength: 200 },
+          approvalStatus: { enum: ['PENDING_APPROVAL', 'APPROVED', 'REJECTED'] },
+          applicationStatus: { enum: ['PENDING_APPROVAL', 'MORE_INFO_REQUIRED', 'APPROVED', 'REJECTED'] },
+          approvedBy: { bsonType: 'objectId' },
           createdAt: { bsonType: 'date' },
+          approvedAt: { bsonType: 'date' },
+          rejectionReason: { bsonType: 'string', maxLength: 1000 },
+          adminMessage: { bsonType: 'string', maxLength: 1000 },
+          profileProof: {
+            bsonType: 'object',
+            required: ['fileName', 'contentType', 'data'],
+            properties: {
+              fileName: { bsonType: 'string', maxLength: 200 },
+              contentType: { enum: ['image/jpeg', 'image/png', 'image/webp', 'application/pdf'] },
+              data: { bsonType: 'string', maxLength: 2800000 }
+            }
+          },
           authorityApprovedAt: { bsonType: 'date' },
           passwordUpdatedAt: { bsonType: 'date' }
         }
@@ -73,9 +91,17 @@ const authCollections = [
           category: { bsonType: 'string', minLength: 1, maxLength: 80 },
           location: { bsonType: 'string', minLength: 1, maxLength: 300 },
           description: { bsonType: 'string', maxLength: 4000 },
-          status: { enum: ['Submitted', 'Verified', 'Assigned', 'In Progress', 'Resolved'] },
+          status: { enum: ['Submitted', 'Verified', 'Assigned', 'In Progress', 'Evidence Submitted', 'Rework Required', 'Resolved'] },
           department: { bsonType: 'string', maxLength: 100 },
           worker: { bsonType: 'string', maxLength: 100 },
+          assignedWorkerId: { bsonType: 'objectId' },
+          assignmentHistory: { bsonType: 'array' },
+          workerTaskStatus: { enum: ['Assigned', 'In Progress', 'Evidence Submitted', 'Rework Required', 'Approved'] },
+          evidenceSubmissions: { bsonType: 'array' },
+          approvedEvidence: { bsonType: 'array' },
+          assignmentInstructions: { bsonType: 'string', maxLength: 1000 },
+          assignmentDeadline: { bsonType: 'date' },
+          resolvedAt: { bsonType: 'date' },
           createdAt: { bsonType: 'date' }
         }
       }

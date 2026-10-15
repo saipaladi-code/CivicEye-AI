@@ -4,11 +4,14 @@ import { useApp } from '../../context/AppContext';
 import { MOCK_PRESET_SAMPLES, MOCK_IMAGES } from '../../data/mockData';
 import { AIAnalysisModal } from './AIAnalysisModal';
 
+const MAX_PHOTO_SIZE_BYTES = 5 * 1024 * 1024;
+
 export const ReportIssue = () => {
   const { submitNewComplaint, setActiveTab, setSelectedComplaintId, showToast } = useApp();
 
   const [selectedPreset, setSelectedPreset] = useState(MOCK_PRESET_SAMPLES[0]);
   const [photoUrl, setPhotoUrl] = useState(MOCK_PRESET_SAMPLES[0].imageUrl);
+  const [isPhotoLoading, setIsPhotoLoading] = useState(false);
   const [category, setCategory] = useState('Auto Detect');
   const [location, setLocation] = useState('Main Road, Near Bus Stop');
   const [description, setDescription] = useState('Large deep pothole causing severe difficulty for two-wheelers and cars during evening traffic.');
@@ -35,6 +38,39 @@ export const ReportIssue = () => {
     setDescription(preset.defaultDesc);
   };
 
+  const handlePhotoUpload = (event) => {
+    const file = event.target.files?.[0];
+    event.target.value = '';
+    if (!file) return;
+    if (!file.type.startsWith('image/')) {
+      showToast('Choose a supported image file.', 'error');
+      return;
+    }
+    if (file.size < 1 || file.size > MAX_PHOTO_SIZE_BYTES) {
+      showToast('Choose an image that is no larger than 5 MB.', 'error');
+      return;
+    }
+
+    setIsPhotoLoading(true);
+    const reader = new FileReader();
+    reader.onload = () => {
+      if (typeof reader.result !== 'string') {
+        setIsPhotoLoading(false);
+        showToast('The selected photo could not be read. Please try another image.', 'error');
+        return;
+      }
+      setPhotoUrl(reader.result);
+      setSelectedPreset({ name: 'Custom Upload', category: 'Auto Detect' });
+      setIsPhotoLoading(false);
+      showToast('Custom photo uploaded successfully!');
+    };
+    reader.onerror = () => {
+      setIsPhotoLoading(false);
+      showToast('The selected photo could not be read. Please try another image.', 'error');
+    };
+    reader.readAsDataURL(file);
+  };
+
   const handleUseCurrentLocation = () => {
     if (navigator.geolocation) {
       navigator.geolocation.getCurrentPosition(
@@ -54,6 +90,10 @@ export const ReportIssue = () => {
 
   const handleAnalyzeClick = (e) => {
     e.preventDefault();
+    if (isPhotoLoading) {
+      showToast('Please wait for the photo to finish loading.', 'error');
+      return;
+    }
     setShowAIModal(true);
   };
 
@@ -117,13 +157,7 @@ export const ReportIssue = () => {
               <input
                 type="file"
                 accept="image/*"
-                onChange={(e) => {
-                  if (e.target.files && e.target.files[0]) {
-                    setPhotoUrl(URL.createObjectURL(e.target.files[0]));
-                    setSelectedPreset({ name: 'Custom Upload', category: 'Auto Detect' });
-                    showToast('Custom photo uploaded successfully!');
-                  }
-                }}
+                onChange={handlePhotoUpload}
                 className="hidden"
                 id="main-file-upload-input"
               />
@@ -178,13 +212,7 @@ export const ReportIssue = () => {
               <input
                 type="file"
                 accept="image/*"
-                onChange={(e) => {
-                  if (e.target.files && e.target.files[0]) {
-                    setPhotoUrl(URL.createObjectURL(e.target.files[0]));
-                    setSelectedPreset({ name: 'Custom Upload', category: 'Auto Detect' });
-                    showToast('Custom photo uploaded successfully!');
-                  }
-                }}
+                onChange={handlePhotoUpload}
                 className="hidden"
                 id="main-file-upload-input-2"
               />
@@ -197,13 +225,7 @@ export const ReportIssue = () => {
               <input
                 type="file"
                 accept="image/*"
-                onChange={(e) => {
-                  if (e.target.files && e.target.files[0]) {
-                    setPhotoUrl(URL.createObjectURL(e.target.files[0]));
-                    setSelectedPreset({ name: 'Custom Upload', category: 'Auto Detect' });
-                    showToast('Custom photo uploaded successfully!');
-                  }
-                }}
+                onChange={handlePhotoUpload}
                 className="hidden"
                 id="main-file-upload-input-3"
               />
@@ -294,10 +316,11 @@ export const ReportIssue = () => {
           <div className="pt-4 border-t border-slate-200 flex justify-end">
             <button
               type="submit"
-              className="px-8 py-4 rounded-2xl bg-gradient-to-r from-sky-600 to-cyan-600 hover:from-sky-500 hover:to-cyan-500 text-white font-extrabold text-sm shadow-xl shadow-sky-600/30 flex items-center gap-3 transition transform hover:-translate-y-0.5"
+              disabled={isPhotoLoading}
+              className="px-8 py-4 rounded-2xl bg-gradient-to-r from-sky-600 to-cyan-600 hover:from-sky-500 hover:to-cyan-500 text-white font-extrabold text-sm shadow-xl shadow-sky-600/30 flex items-center gap-3 transition transform hover:-translate-y-0.5 disabled:cursor-wait disabled:opacity-60"
             >
               <Sparkles className="w-5 h-5 text-amber-300" />
-              Analyze & Submit Complaint
+              {isPhotoLoading ? 'Preparing Photo...' : 'Analyze & Submit Complaint'}
             </button>
           </div>
 

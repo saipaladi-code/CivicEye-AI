@@ -119,10 +119,12 @@ const BrandMark = () => (
 );
 
 export const AuthPage = ({ blockedAccess = false, defaultAccountType = 'citizen' }) => {
-  const { setActiveTab, setUser } = useApp();
+  const { setActiveTab, setUser, activeTab } = useApp();
   const [resetToken, setResetToken] = useState(() => new URLSearchParams(window.location.search).get('resetToken') || '');
   const [mode, setMode] = useState(() => (
-    new URLSearchParams(window.location.search).has('resetToken') ? 'reset-password' : 'login'
+    new URLSearchParams(window.location.search).has('resetToken')
+      ? 'reset-password'
+      : activeTab === 'auth-signup' ? 'signup' : 'login'
   ));
   const [accountType, setAccountType] = useState(defaultAccountType);
   const [showPassword, setShowPassword] = useState(false);
@@ -146,11 +148,38 @@ export const AuthPage = ({ blockedAccess = false, defaultAccountType = 'citizen'
     setMessage(null);
   };
 
+  const readProfileProof = (file) => new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onerror = () => reject(new Error('The selected profile photo or ID proof could not be read.'));
+    reader.onload = () => {
+      const result = typeof reader.result === 'string' ? reader.result : '';
+      const separator = result.indexOf(',');
+      if (separator < 0) {
+        reject(new Error('The selected profile photo or ID proof is invalid.'));
+        return;
+      }
+      resolve({
+        fileName: file.name,
+        contentType: file.type,
+        data: result.slice(separator + 1)
+      });
+    };
+    reader.readAsDataURL(file);
+  });
+
   const handleSubmit = async (event) => {
     event.preventDefault();
     if (isSubmitting) return;
     const form = event.currentTarget;
     const formData = new FormData(form);
+    const proofFile = formData.get('profileProof');
+    if (
+      isSignup && accountType === 'field_worker' &&
+      proofFile instanceof File && proofFile.size > 2 * 1024 * 1024
+    ) {
+      setMessage({ type: 'error', text: 'The profile photo or employee ID proof must be 2 MB or smaller.' });
+      return;
+    }
     if (isSignup || isResetPassword) {
       if (formData.get('password') !== formData.get('confirmPassword')) {
         setMessage({ type: 'error', text: 'Your passwords do not match. Please try again.' });
@@ -185,7 +214,15 @@ export const AuthPage = ({ blockedAccess = false, defaultAccountType = 'citizen'
             email: formData.get('email'),
             mobile: formData.get('mobile'),
             password: formData.get('password'),
-            accountType
+            accountType,
+            ...(accountType === 'field_worker' ? {
+              department: formData.get('department'),
+              employeeId: formData.get('employeeId'),
+              workLocation: formData.get('workLocation'),
+              ...(formData.get('profileProof')?.size ? {
+                profileProof: await readProfileProof(formData.get('profileProof'))
+              } : {})
+            } : {})
           }
         : {
             email: formData.get('email'),
@@ -194,8 +231,20 @@ export const AuthPage = ({ blockedAccess = false, defaultAccountType = 'citizen'
             accountType
           };
       const result = await authRequest(isSignup ? 'register' : 'login', body);
+      if (isSignup && accountType === 'field_worker') {
+        form.reset();
+        setMode('login');
+        setMessage({ type: 'success', text: result.message });
+        return;
+      }
       setUser(result.user);
-      setActiveTab(result.user.role === 'authority' ? 'authority-dashboard' : 'citizen-dashboard');
+      setActiveTab(
+        result.user.role === 'authority'
+          ? 'authority-dashboard'
+          : ['worker', 'field_worker'].includes(result.user.role)
+            ? 'worker-dashboard'
+            : 'citizen-dashboard'
+      );
     } catch (error) {
       setMessage({ type: 'error', text: error.message });
     } finally {
@@ -278,9 +327,22 @@ export const AuthPage = ({ blockedAccess = false, defaultAccountType = 'citizen'
                     />
                     <ShieldCheck className="h-4 w-4" /> Municipal Authority
                   </label>
+                  <label className={accountType === 'field_worker' ? 'selected authority-selected' : ''}>
+                    <input
+                      type="radio"
+                      name="accountType"
+                      value="field_worker"
+                      checked={accountType === 'field_worker'}
+                      onChange={() => { setAccountType('field_worker'); setMessage(null); }}
+                    />
+                    <UserRound className="h-4 w-4" /> Field Worker
+                  </label>
                 </div>
                 {accountType === 'authority' && (
-                  <p className="auth-role-note">Authority accounts require municipal approval. Role selection alone never grants dashboard access.</p>
+                  <p className="auth-role-note">Municipal Authority accounts must be provisioned by an administrator.</p>
+                )}
+                {accountType === 'field_worker' && (
+                  <p className="auth-role-note">Field Worker applications are reviewed by a municipal administrator before dashboard access is granted.</p>
                 )}
               </fieldset>
             )}
@@ -305,13 +367,51 @@ export const AuthPage = ({ blockedAccess = false, defaultAccountType = 'citizen'
 
             {isSignup && (
               <label className="auth-field">
-                <span>Mobile number <span className="auth-optional">Optional</span></span>
+                <span>Mobile number {accountType !== 'field_worker' && <span className="auth-optional">Optional</span>}</span>
                 <div className="auth-input-wrap">
-                  <input name="mobile" type="tel" autoComplete="tel" inputMode="tel" placeholder="Your mobile number" />
+                  <input name="mobile" type="tel" autoComplete="tel" inputMode="tel" placeholder="Your mobile number" required={accountType === 'field_worker'} />
                 </div>
               </label>
             )}
 
+            {isSignup && accountType === 'field_worker' && (
+              <>
+                <label className="auth-field">
+                  <span>Department</span>
+                  <div className="auth-input-wrap">
+                    <select name="department" required defaultValue="" className="h-full min-h-[47px] w-full border-0 bg-transparent px-3 text-xs text-[#203b2b] outline-none">
+                      <option value="" disabled>Select your department</option>
+                      {['Sanitation', 'Road Maintenance', 'Water Supply', 'Electrical Maintenance', 'Drainage'].map((department) => (
+                        <option key={department} value={department}>{department}</option>
+                      ))}
+                    </select>
+                  </div>
+                </label>
+                <label className="auth-field">
+                  <span>Employee ID</span>
+                  <div className="auth-input-wrap">
+                    <input name="employeeId" type="text" autoComplete="off" maxLength={80} placeholder="Your employee ID" required />
+                  </div>
+                </label>
+                <label className="auth-field">
+                  <span>Work location or municipality</span>
+                  <div className="auth-input-wrap">
+                    <input name="workLocation" type="text" maxLength={200} placeholder="Municipality or work location" required />
+                  </div>
+                </label>
+                <label className="auth-field">
+                  <span>Profile photo or employee ID proof <span className="auth-optional">Optional · Max 2 MB</span></span>
+                  <div className="auth-input-wrap">
+                    <input
+                      className="w-full min-w-0 border-0 bg-transparent px-3 py-3 text-xs text-[#203b2b]"
+                      name="profileProof"
+                      type="file"
+                      accept="image/jpeg,image/png,image/webp,application/pdf"
+                    />
+                  </div>
+                </label>
+              </>
+            )}
             {!isResetRequest && (
               <label className="auth-field">
                 <span>Password</span>

@@ -9,6 +9,8 @@ import { ComplaintTracking } from './components/citizen/ComplaintTracking';
 import { AuthorityDashboard } from './components/authority/AuthorityDashboard';
 import { IssueManagement } from './components/authority/IssueManagement';
 import { AuthorityAnalytics } from './components/authority/AuthorityAnalytics';
+import { FieldWorkerApplications } from './components/authority/FieldWorkerApplications';
+import { WorkerDashboard } from './components/worker/WorkerDashboard';
 import { NotificationDrawer } from './components/common/NotificationDrawer';
 import { Toast } from './components/common/Toast';
 import { AuthPage } from './components/auth/AuthPage';
@@ -19,16 +21,25 @@ const MainContent = () => {
   const [notifDrawerOpen, setNotifDrawerOpen] = useState(false);
   const authRoute = activeTab.startsWith('auth-');
   const protectedRoute = !authRoute && activeTab !== 'landing';
-  const authorityRoute = ['authority-dashboard', 'issue-management', 'authority-analytics'].includes(activeTab);
-  const roleMismatch = user && protectedRoute && (authorityRoute !== (user.role === 'authority'));
-  const homeTab = user?.role === 'authority' ? 'authority-dashboard' : 'citizen-dashboard';
+  const authorityRoute = ['authority-dashboard', 'issue-management', 'authority-analytics', 'field-worker-applications'].includes(activeTab);
+  const workerRoute = activeTab === 'worker-dashboard';
+  const roleMismatch = user && protectedRoute && (
+    authorityRoute ? user.role !== 'authority'
+      : workerRoute ? !['worker', 'field_worker'].includes(user.role)
+        : user.role !== 'citizen'
+  );
+  const homeTab = user?.role === 'authority'
+    ? 'authority-dashboard'
+    : ['worker', 'field_worker'].includes(user?.role) ? 'worker-dashboard' : 'citizen-dashboard';
 
   useEffect(() => {
     if (user && (authRoute || roleMismatch)) setActiveTab(homeTab);
   }, [user, authRoute, roleMismatch, homeTab, setActiveTab]);
 
   if (authRoute && !user) {
-    return <AuthPage defaultAccountType={activeTab === 'auth-authority' ? 'authority' : 'citizen'} />;
+    return <AuthPage
+      defaultAccountType={activeTab === 'auth-authority' ? 'authority' : 'citizen'}
+    />;
   }
 
   if (protectedRoute && (authLoading || dataLoading || !user || roleMismatch)) {
@@ -54,6 +65,8 @@ const MainContent = () => {
         {activeTab === 'authority-dashboard' && <AuthorityDashboard />}
         {activeTab === 'issue-management' && <IssueManagement />}
         {activeTab === 'authority-analytics' && <AuthorityAnalytics />}
+        {activeTab === 'field-worker-applications' && <FieldWorkerApplications />}
+        {activeTab === 'worker-dashboard' && <WorkerDashboard />}
       </main>
 
       {/* Footer */}

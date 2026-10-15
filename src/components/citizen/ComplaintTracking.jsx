@@ -43,7 +43,7 @@ export const ComplaintTracking = () => {
               <span className={`px-3 py-1 rounded-full text-xs font-extrabold border ${
                 isResolved
                   ? 'bg-emerald-100 text-emerald-800 border-emerald-300'
-                  : c.status === 'In Progress'
+                  : ['In Progress', 'Assigned', 'Evidence Submitted', 'Rework Required'].includes(c.status)
                   ? 'bg-sky-100 text-sky-800 border-sky-300'
                   : 'bg-amber-100 text-amber-800 border-amber-300'
               }`}>
@@ -95,8 +95,8 @@ export const ComplaintTracking = () => {
 
           <div className="p-4 rounded-2xl bg-slate-50 border border-slate-200 space-y-1">
             <span className="text-[10px] uppercase font-bold text-slate-400">Expected Resolution</span>
-            <div className="text-sm font-extrabold text-slate-800">{c.expectedResolution || '2026-09-23'}</div>
-            <div className="text-[10px] text-emerald-600 font-bold">{isResolved ? 'Resolved on Schedule' : 'Active Target'}</div>
+            <div className="text-sm font-extrabold text-slate-800">{c.expectedResolution || 'Not provided'}</div>
+            <div className="text-[10px] text-emerald-600 font-bold">{isResolved ? `Authority verified · ${c.resolvedDate || 'Resolved'}` : c.workerTaskStatus || 'Awaiting updates'}</div>
           </div>
         </div>
 
@@ -184,19 +184,24 @@ export const ComplaintTracking = () => {
                 </div>
               </div>
 
-              <div className="space-y-2">
-                <div className="flex items-center justify-between text-xs font-bold text-emerald-700">
-                  <span>AFTER (Resolved Fix)</span>
-                  <span>{c.resolvedDate || '2026-09-21'}</span>
+              {c.approvedEvidence?.flatMap((submission) => submission.photos.map((photo) => (
+                <div key={photo.id} className="space-y-2">
+                  <div className="flex items-center justify-between text-xs font-bold text-emerald-700">
+                    <span>APPROVED COMPLETION PHOTO</span>
+                    <span>{new Date(submission.submittedAt).toLocaleDateString()}</span>
+                  </div>
+                  <div className="aspect-video w-full rounded-2xl overflow-hidden bg-slate-900 border-2 border-emerald-400 shadow">
+                    <img src={photo.url} alt="Authority-approved completion evidence" className="h-full w-full object-cover" />
+                  </div>
                 </div>
-                <div className="aspect-video w-full rounded-2xl overflow-hidden bg-slate-900 border-2 border-emerald-400 shadow">
-                  <img src={c.resolutionImageUrl || c.imageUrl} alt="After" className="w-full h-full object-cover" />
-                </div>
-              </div>
+              )))}
             </div>
 
             <div className="p-4 rounded-2xl bg-emerald-50 border border-emerald-200 text-emerald-900 text-xs font-semibold leading-relaxed">
-              ✓ Field Worker <strong>{c.worker || 'Alex Miller'}</strong> from <strong>{c.department || 'Road Maintenance'}</strong> uploaded high-resolution completion evidence. Inspection verified zero active hazards.
+            ✓ Authority-verified resolution · Field Worker <strong>{c.worker || 'Field worker'}</strong> from <strong>{c.department || 'Municipal department'}</strong> · Resolved {c.resolvedDate || ''}
+            {c.approvedEvidence?.map((submission) => (
+              <p key={submission.id} className="mt-2 font-normal">Completion note: {submission.note}{submission.reviewerName ? ` — Verified by ${submission.reviewerName}` : ''}</p>
+            ))}
             </div>
           </div>
         </div>

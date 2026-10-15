@@ -1,9 +1,10 @@
-import React, { useState } from 'react';
-import { Cpu, ShieldCheck, UserCheck, CheckCircle2, AlertTriangle, X, Upload, MapPin, Sparkles, Building2, Send } from 'lucide-react';
+import React, { useEffect, useState } from 'react';
+import { Cpu, ShieldCheck, UserCheck, CheckCircle2, AlertTriangle, X, MapPin, Building2, Send, CalendarDays } from 'lucide-react';
 import { useApp } from '../../context/AppContext';
+import { workflowRequest } from '../../utils/workflowApi';
 
 export const IssueDetailModal = ({ complaint, isOpen, onClose }) => {
-  const { assignIssue, updateStatus, resolveComplaint, showToast } = useApp();
+  const { assignIssue, updateStatus, reviewWorkerEvidence, showToast } = useApp();
 
   const departments = [
     'Road Maintenance',
@@ -13,17 +14,37 @@ export const IssueDetailModal = ({ complaint, isOpen, onClose }) => {
     'Drainage Department'
   ];
 
-  const workersMap = {
-    'Road Maintenance': ['Alex Miller', 'Vikram Patel', 'Suresh Gowda'],
-    'Sanitation': ['Karan Singh', 'Sunil Gowda', 'Ramesh Rao'],
-    'Electrical': ['Rajesh Rao', 'Prakash Iyer', 'Manoj Kumar'],
-    'Water Department': ['David Chen', 'Anil Sharma', 'Vijay Roy'],
-    'Drainage Department': ['Sanjay Kumar', 'Ganesh Prasad', 'Nitin Sethi']
-  };
-
   const [selectedDept, setSelectedDept] = useState(complaint?.department || 'Road Maintenance');
-  const [selectedWorker, setSelectedWorker] = useState(complaint?.worker || 'Alex Miller');
-  const [resolutionPhoto, setResolutionPhoto] = useState(complaint?.resolutionImageUrl || 'https://images.unsplash.com/photo-1584467735871-8e85353a8413?auto=format&fit=crop&w=800&q=80');
+  const [selectedWorker, setSelectedWorker] = useState(complaint?.assignedWorkerId || '');
+  const [workers, setWorkers] = useState([]);
+  const [workersLoading, setWorkersLoading] = useState(false);
+  const [instructions, setInstructions] = useState(complaint?.assignmentInstructions || '');
+  const [deadline, setDeadline] = useState(complaint?.assignmentDeadline ? new Date(complaint.assignmentDeadline).toISOString().slice(0, 10) : '');
+  const [rejectionReason, setRejectionReason] = useState('');
+  const pendingSubmission = [...(complaint?.evidenceSubmissions || [])].reverse().find((submission) => submission.status === 'Submitted');
+  const eligibleWorkers = workers.filter((worker) => worker.department === selectedDept);
+
+  useEffect(() => {
+    if (!isOpen) return;
+    let active = true;
+    setSelectedDept(complaint?.department || 'Road Maintenance');
+    setSelectedWorker(complaint?.assignedWorkerId || '');
+    setInstructions(complaint?.assignmentInstructions || '');
+    setDeadline(complaint?.assignmentDeadline ? new Date(complaint.assignmentDeadline).toISOString().slice(0, 10) : '');
+    setRejectionReason('');
+    setWorkersLoading(true);
+    workflowRequest('workers')
+      .then(({ workers: eligibleWorkers }) => {
+        if (!active) return;
+        setWorkers(eligibleWorkers);
+        const matchingWorker = eligibleWorkers.find((worker) => worker.id === complaint?.assignedWorkerId) ||
+          eligibleWorkers.find((worker) => worker.department === (complaint?.department || 'Road Maintenance'));
+        setSelectedWorker(matchingWorker?.id || '');
+      })
+      .catch((error) => showToast(error.message, 'error'))
+      .finally(() => { if (active) setWorkersLoading(false); });
+    return () => { active = false; };
+  }, [isOpen, complaint?.id]);
 
   if (!isOpen || !complaint) return null;
 
@@ -37,15 +58,30 @@ export const IssueDetailModal = ({ complaint, isOpen, onClose }) => {
 
   const handleAssign = (e) => {
     e.preventDefault();
-    assignIssue(c.id, selectedDept, selectedWorker);
+    const worker = workers.find((item) => item.id === selectedWorker);
+    if (!worker) {
+      showToast('Select an eligible field worker before assigning this complaint.', 'error');
+      return;
+    }
+    assignIssue(c.id, {
+      department: selectedDept,
+      workerId: worker.id,
+      workerName: worker.fullName,
+      instructions,
+      deadline
+    });
   };
 
   const handleStatusChange = (newStatus) => {
     updateStatus(c.id, newStatus);
   };
 
-  const handleMarkResolved = () => {
-    resolveComplaint(c.id, resolutionPhoto);
+  const handleReview = (decision) => {
+    if (decision === 'reject' && rejectionReason.trim().length < 3) {
+      showToast('Enter a rejection reason before returning this task.', 'error');
+      return;
+    }
+    reviewWorkerEvidence(c.id, decision, rejectionReason);
   };
 
   return (
@@ -195,8 +231,8 @@ export const IssueDetailModal = ({ complaint, isOpen, onClose }) => {
                   value={selectedDept}
                   onChange={(e) => {
                     setSelectedDept(e.target.value);
-                    const list = workersMap[e.target.value] || [];
-                    if (list.length > 0) setSelectedWorker(list[0]);
+                    const nextWorker = workers.find((worker) => worker.department === e.target.value);
+                    setSelectedWorker(nextWorker?.id || '');
                   }}
                   className="w-full px-4 py-2.5 rounded-xl border border-slate-300 text-xs font-bold bg-white"
                 >
@@ -211,18 +247,29 @@ export const IssueDetailModal = ({ complaint, isOpen, onClose }) => {
                 <select
                   value={selectedWorker}
                   onChange={(e) => setSelectedWorker(e.target.value)}
+                  disabled={workersLoading || !eligibleWorkers.length}
                   className="w-full px-4 py-2.5 rounded-xl border border-slate-300 text-xs font-bold bg-white"
                 >
-                  {(workersMap[selectedDept] || []).map((w, idx) => (
-                    <option key={idx} value={w}>{w}</option>
+                  {eligibleWorkers.map((worker) => (
+                    <option key={worker.id} value={worker.id}>{worker.fullName} — {worker.department || 'No department'}</option>
                   ))}
                 </select>
               </div>
             </div>
 
+            <label className="block space-y-1 text-xs font-bold text-slate-600">
+              Assignment instructions
+              <textarea value={instructions} onChange={(event) => setInstructions(event.target.value)} maxLength={1000} rows={2} className="w-full rounded-xl border border-slate-300 bg-white p-3 font-normal" placeholder="Optional instructions for the field worker" />
+            </label>
+            <label className="block space-y-1 text-xs font-bold text-slate-600">
+              <span className="inline-flex items-center gap-2"><CalendarDays className="h-4 w-4" /> Deadline (optional)</span>
+              <input type="date" value={deadline} onChange={(event) => setDeadline(event.target.value)} className="w-full rounded-xl border border-slate-300 bg-white px-4 py-2.5 font-normal" />
+            </label>
+
             <div className="flex justify-end pt-2">
               <button
                 type="submit"
+                disabled={workersLoading || !eligibleWorkers.length}
                 className="px-6 py-3 rounded-xl bg-sky-600 hover:bg-sky-500 text-white font-extrabold text-xs shadow-md shadow-sky-600/20 flex items-center gap-2"
               >
                 <Send className="w-4 h-4" /> Assign Issue & Notify Citizen
@@ -230,36 +277,46 @@ export const IssueDetailModal = ({ complaint, isOpen, onClose }) => {
             </div>
           </form>
 
-          {/* FIELD WORKER RESOLUTION SECTION */}
           <div className="p-6 rounded-2xl bg-emerald-50/60 border border-emerald-200 space-y-4">
             <h4 className="font-extrabold text-sm text-emerald-900 flex items-center gap-2">
               <CheckCircle2 className="w-4 h-4 text-emerald-600" />
-              Field Worker Resolution & Evidence Upload
+              Field Worker Resolution & Evidence Review
             </h4>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 items-center">
-              <div className="space-y-2">
-                <label className="text-xs font-bold text-slate-600">Upload Resolution / After Photo</label>
-                <div className="aspect-video w-full rounded-xl overflow-hidden bg-slate-900 border border-slate-300 relative">
-                  <img src={resolutionPhoto} alt="After Resolution" className="w-full h-full object-cover" />
-                </div>
-              </div>
-
-              <div className="space-y-3">
-                <div className="text-xs text-slate-600">
-                  Worker: <strong>{c.worker || 'Alex Miller'}</strong> ({c.department || 'Road Maintenance'})
-                </div>
-
-                <button
-                  type="button"
-                  onClick={handleMarkResolved}
-                  className="w-full py-4 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-extrabold text-xs shadow-lg shadow-emerald-600/20 flex items-center justify-center gap-2"
-                >
-                  <CheckCircle2 className="w-5 h-5" />
-                  Mark as Resolved & Publish Evidence
-                </button>
-              </div>
+            <div className="text-xs text-slate-600">
+              Assigned worker: <strong>{c.worker || 'Not assigned'}</strong> ({c.department || 'Department not set'}) · Status: <strong>{c.workerTaskStatus || c.status}</strong>
             </div>
+            {pendingSubmission ? (
+              <div className="space-y-4 rounded-2xl border border-emerald-200 bg-white p-4">
+                <div className="text-xs text-slate-600">
+                  <strong>{pendingSubmission.workerName}</strong> submitted on {new Date(pendingSubmission.submittedAt).toLocaleString()}
+                  <p className="mt-2 whitespace-pre-wrap text-sm text-slate-800">{pendingSubmission.note}</p>
+                </div>
+                <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
+                  {pendingSubmission.photos.map((photo) => (
+                    <img key={photo.id} src={photo.url} alt="Field worker completion evidence" className="aspect-video w-full rounded-xl border border-slate-200 object-cover" />
+                  ))}
+                </div>
+                <label className="block space-y-1 text-xs font-bold text-slate-600">
+                  Rejection reason (required to reject)
+                  <textarea value={rejectionReason} onChange={(event) => setRejectionReason(event.target.value)} maxLength={1000} rows={2} className="w-full rounded-xl border border-slate-300 p-3 font-normal" />
+                </label>
+                <div className="flex flex-wrap justify-end gap-3">
+                  <button type="button" onClick={() => handleReview('reject')} className="rounded-xl border border-rose-300 bg-rose-50 px-5 py-3 text-xs font-extrabold text-rose-800 hover:bg-rose-100">Reject Evidence</button>
+                  <button type="button" onClick={() => handleReview('approve')} className="inline-flex items-center gap-2 rounded-xl bg-emerald-700 px-5 py-3 text-xs font-extrabold text-white hover:bg-emerald-800"><CheckCircle2 className="h-4 w-4" /> Approve Evidence & Resolve</button>
+                </div>
+              </div>
+            ) : <p className="rounded-xl bg-white p-4 text-xs text-slate-600">No evidence is currently awaiting review. Worker-submitted evidence will appear here.</p>}
+
+            {c.approvedEvidence?.map((submission) => (
+              <div key={submission.id} className="rounded-2xl border border-emerald-200 bg-white p-4">
+                <p className="text-xs font-bold text-emerald-800">Approved · {new Date(submission.submittedAt).toLocaleString()}</p>
+                <p className="mt-2 text-sm text-slate-700">{submission.note}</p>
+                <div className="mt-3 grid grid-cols-2 gap-3 sm:grid-cols-3">
+                  {submission.photos.map((photo) => <img key={photo.id} src={photo.url} alt="Approved completion evidence" className="aspect-video w-full rounded-xl object-cover" />)}
+                </div>
+              </div>
+            ))}
           </div>
 
         </div>

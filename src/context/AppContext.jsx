@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import { authRequest } from '../utils/authApi';
 import { dataRequest } from '../utils/dataApi';
+import { workflowRequest } from '../utils/workflowApi';
 
 const AppContext = createContext();
 
@@ -83,8 +84,29 @@ export const AppProvider = ({ children }) => {
   }, [user?.id]);
 
   useEffect(() => {
+    if (!user) return undefined;
+    const refresh = () => {
+      if (document.visibilityState === 'visible') {
+        refreshUserData().catch((error) => showToast(error.message, 'error'));
+      }
+    };
+    const intervalId = window.setInterval(refresh, 30000);
+    window.addEventListener('focus', refresh);
+    return () => {
+      window.clearInterval(intervalId);
+      window.removeEventListener('focus', refresh);
+    };
+  }, [user?.id]);
+
+  useEffect(() => {
     if (user && !authLoading && activeTab === 'landing') {
-      setActiveTab(user.role === 'authority' ? 'authority-dashboard' : 'citizen-dashboard');
+      setActiveTab(
+        user.role === 'authority'
+          ? 'authority-dashboard'
+          : ['worker', 'field_worker'].includes(user.role)
+            ? 'worker-dashboard'
+            : 'citizen-dashboard'
+      );
     }
   }, [user, authLoading, activeTab]);
 
@@ -117,15 +139,15 @@ export const AppProvider = ({ children }) => {
   };
 
   // Assign Issue (Authority action)
-  const assignIssue = async (id, department, worker) => {
+  const assignIssue = async (id, assignment) => {
     try {
       const { complaint } = await dataRequest(`complaints/${encodeURIComponent(id)}/assignment`, {
         method: 'PATCH',
-        body: { department, worker }
+        body: assignment
       });
       setComplaints((previous) => previous.map((item) => item.id === id ? complaint : item));
       await refreshUserData();
-      showToast(`Complaint ${id} assigned to ${department} (${worker}).`);
+      showToast(`Complaint ${id} assigned to ${assignment.department} (${assignment.workerName}).`);
     } catch (error) {
       showToast(error.message, 'error');
     }
@@ -146,23 +168,33 @@ export const AppProvider = ({ children }) => {
     }
   };
 
-  // Mark as Resolved with Resolution Photo Upload (Worker / Authority action)
-  const resolveComplaint = async (id, resolutionImageUrl) => {
+  const runWorkflowAction = async (action, body, successMessage) => {
     try {
-      const { complaint } = await dataRequest(`complaints/${encodeURIComponent(id)}/resolve`, {
-        method: 'PATCH',
-        body: { resolutionImageUrl }
-      });
-      setComplaints((previous) => previous.map((item) => item.id === id ? complaint : item));
+      const { complaint } = await workflowRequest(action, body);
+      const complaintId = body.complaintId;
+      setComplaints((previous) => previous.map((item) => item.id === complaintId ? complaint : item));
       await refreshUserData();
-      if (typeof window !== 'undefined' && window.confetti) {
+      if (action === 'review' && body.decision === 'approve' && typeof window !== 'undefined' && window.confetti) {
         window.confetti({ particleCount: 100, spread: 70, origin: { y: 0.6 } });
       }
-      showToast(`Complaint ${id} successfully RESOLVED with photo evidence!`, 'success');
+      showToast(successMessage, 'success');
+      return complaint;
     } catch (error) {
       showToast(error.message, 'error');
+      throw error;
     }
   };
+
+  const startWorkerTask = (id) => runWorkflowAction(
+    'start', { complaintId: id }, `Work started on ${id}.`
+  );
+  const submitWorkerEvidence = (id, note, photos) => runWorkflowAction(
+    'submit', { complaintId: id, note, photos }, `Evidence for ${id} submitted for approval.`
+  );
+  const reviewWorkerEvidence = (id, decision, reason = '') => runWorkflowAction(
+    'review', { complaintId: id, decision, reason },
+    decision === 'approve' ? `${id} resolved after evidence approval.` : `Evidence for ${id} returned for rework.`
+  );
 
   const markAllNotificationsRead = async () => {
     try {
@@ -188,7 +220,10 @@ export const AppProvider = ({ children }) => {
       submitNewComplaint,
       assignIssue,
       updateStatus,
-      resolveComplaint,
+      startWorkerTask,
+      submitWorkerEvidence,
+      reviewWorkerEvidence,
+      refreshUserData,
       demoActive, setDemoActive,
       demoStep, setDemoStep
     }}>
