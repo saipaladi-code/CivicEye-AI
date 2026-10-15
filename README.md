@@ -70,7 +70,7 @@ For production, run `npm run build`, set `NODE_ENV=production`, and start with `
 
 ### Deploying to Vercel
 
-The Vercel deployment serves the Vite frontend from `dist` and exposes the Express API through serverless entry points under `api/`. These entry points reuse the same backend routes and MongoDB session store as local development. Add `MONGODB_URI` and optionally `MONGODB_DB_NAME` to the Vercel project's server-side Environment Variables for every deployment environment, then redeploy. Add `GEMINI_API_KEY` if image analysis is needed. Configure the SMTP variables and `APP_BASE_URL` to enable password reset emails. Keep credentials server-side; do not add database credentials to variables prefixed with `VITE_`.
+The Vercel deployment serves the Vite frontend from `dist` and exposes the Express API through serverless entry points under `api/`. Dynamic route entry points reuse the same backend routes and MongoDB session store as local development while keeping the function count within the Vercel Hobby plan limit. Add `MONGODB_URI` and optionally `MONGODB_DB_NAME` to the Vercel project's server-side Environment Variables for every deployment environment, then redeploy. Add `GEMINI_API_KEY` if image analysis is needed. Configure the SMTP variables and `APP_BASE_URL` to enable password reset emails. Keep credentials server-side; do not add database credentials to variables prefixed with `VITE_`.
 
 ---
 
