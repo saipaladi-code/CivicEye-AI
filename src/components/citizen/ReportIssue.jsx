@@ -3,17 +3,23 @@ import { Camera, MapPin, Upload, Sparkles, CheckCircle2, AlertCircle, ArrowRight
 import { useApp } from '../../context/AppContext';
 import { MOCK_PRESET_SAMPLES, MOCK_IMAGES } from '../../data/mockData';
 import { AIAnalysisModal } from './AIAnalysisModal';
+import { getCurrentLocation } from '../../utils/geolocation';
 
 const MAX_PHOTO_SIZE_BYTES = 5 * 1024 * 1024;
 
 export const ReportIssue = () => {
-  const { submitNewComplaint, setActiveTab, setSelectedComplaintId, showToast } = useApp();
+  const {
+    submitNewComplaint, setActiveTab, setSelectedComplaintId, showToast,
+    setCurrentLocation
+  } = useApp();
 
   const [selectedPreset, setSelectedPreset] = useState(MOCK_PRESET_SAMPLES[0]);
   const [photoUrl, setPhotoUrl] = useState(MOCK_PRESET_SAMPLES[0].imageUrl);
   const [isPhotoLoading, setIsPhotoLoading] = useState(false);
   const [category, setCategory] = useState('Auto Detect');
   const [location, setLocation] = useState('Main Road, Near Bus Stop');
+  const [coordinates, setCoordinates] = useState(null);
+  const [isLocating, setIsLocating] = useState(false);
   const [description, setDescription] = useState('Large deep pothole causing severe difficulty for two-wheelers and cars during evening traffic.');
   
   const [showAIModal, setShowAIModal] = useState(false);
@@ -35,6 +41,7 @@ export const ReportIssue = () => {
     setPhotoUrl(preset.imageUrl);
     setCategory(preset.category);
     setLocation(preset.defaultLocation);
+    setCoordinates(null);
     setDescription(preset.defaultDesc);
   };
 
@@ -71,20 +78,18 @@ export const ReportIssue = () => {
     reader.readAsDataURL(file);
   };
 
-  const handleUseCurrentLocation = () => {
-    if (navigator.geolocation) {
-      navigator.geolocation.getCurrentPosition(
-        (pos) => {
-          setLocation(`Geolocated Locus (${pos.coords.latitude.toFixed(4)}, ${pos.coords.longitude.toFixed(4)}) - Main Street`);
-          showToast('Current GPS coordinates acquired!');
-        },
-        () => {
-          setLocation('Main Road, Near Bus Stop (GPS Auto-detect)');
-          showToast('Location updated via simulated GPS.');
-        }
-      );
-    } else {
-      setLocation('Main Road, Near Bus Stop (GPS Auto-detect)');
+  const handleUseCurrentLocation = async () => {
+    setIsLocating(true);
+    try {
+      const position = await getCurrentLocation();
+      setCoordinates(position);
+      setCurrentLocation(position);
+      setLocation(`Current location (${position.lat.toFixed(6)}, ${position.lng.toFixed(6)})`);
+      showToast('Your current location has been added to the report.');
+    } catch (error) {
+      showToast(error.message, 'error');
+    } finally {
+      setIsLocating(false);
     }
   };
 
@@ -92,6 +97,10 @@ export const ReportIssue = () => {
     e.preventDefault();
     if (isPhotoLoading) {
       showToast('Please wait for the photo to finish loading.', 'error');
+      return;
+    }
+    if (!coordinates) {
+      showToast('Use Current Location to add accurate map coordinates before continuing.', 'error');
       return;
     }
     setShowAIModal(true);
@@ -111,7 +120,8 @@ export const ReportIssue = () => {
         description: geminiData.explanation ? `${description} (${geminiData.explanation})` : description,
         severity: geminiData.severity || selectedPreset.severity || 'High',
         confidence: geminiData.confidence || selectedPreset.confidence || 94,
-        publicImpact: selectedPreset.publicImpact || 'High'
+        publicImpact: selectedPreset.publicImpact || 'High',
+        coordinates
       });
       setSubmittedComplaint(newComp);
     } catch (error) {
@@ -281,19 +291,28 @@ export const ReportIssue = () => {
                 <button
                   type="button"
                   onClick={handleUseCurrentLocation}
-                  className="text-xs text-sky-600 hover:text-sky-700 font-bold flex items-center gap-1"
+                  disabled={isLocating}
+                  className="text-xs text-sky-600 hover:text-sky-700 font-bold flex items-center gap-1 disabled:cursor-wait disabled:opacity-60"
                 >
-                  <MapPin className="w-3.5 h-3.5" /> Use Current Location
+                  <MapPin className="w-3.5 h-3.5" /> {isLocating ? 'Finding Location...' : 'Use Current Location'}
                 </button>
               </div>
               <input
                 type="text"
                 value={location}
-                onChange={(e) => setLocation(e.target.value)}
+                onChange={(e) => {
+                  setLocation(e.target.value);
+                  setCoordinates(null);
+                }}
                 required
                 placeholder="e.g. Main Road, Near Bus Stop"
                 className="w-full px-4 py-3 rounded-xl border border-slate-300 focus:ring-2 focus:ring-sky-500/20 focus:border-sky-500 text-sm font-medium"
               />
+              <p className="text-[11px] text-slate-500">
+                {coordinates
+                  ? 'GPS coordinates will be saved with this report.'
+                  : 'Allow location access and use Current Location to place this report accurately on the map.'}
+              </p>
             </div>
 
           </div>

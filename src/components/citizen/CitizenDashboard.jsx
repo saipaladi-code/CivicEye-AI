@@ -1,10 +1,15 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { FileText, Clock, AlertCircle, CheckCircle2, MapPin, ArrowRight, PlusCircle } from 'lucide-react';
 import { useApp } from '../../context/AppContext';
 import { InteractiveMap } from '../common/InteractiveMap';
+import { getCurrentLocation } from '../../utils/geolocation';
 
 export const CitizenDashboard = () => {
-  const { complaints, setActiveTab, setSelectedComplaintId } = useApp();
+  const {
+    complaints, setActiveTab, setSelectedComplaintId,
+    currentLocation, setCurrentLocation, showToast
+  } = useApp();
+  const [isLocating, setIsLocating] = useState(false);
 
   const total = complaints.length;
   const pending = complaints.filter(c => c.status === 'Pending' || c.status === 'Submitted').length;
@@ -14,6 +19,17 @@ export const CitizenDashboard = () => {
   const handleSelectComplaint = (id) => {
     setSelectedComplaintId(id);
     setActiveTab('tracking');
+  };
+
+  const handleLocateMe = async () => {
+    setIsLocating(true);
+    try {
+      setCurrentLocation(await getCurrentLocation());
+    } catch (error) {
+      showToast(error.message, 'error');
+    } finally {
+      setIsLocating(false);
+    }
   };
 
   return (
@@ -90,14 +106,20 @@ export const CitizenDashboard = () => {
             <h2 className="text-lg font-bold text-slate-900">City Issue Map</h2>
             <p className="text-xs text-slate-500">Live spatial view of reported issues and AI priority markers.</p>
           </div>
-          <span className="text-xs font-semibold text-sky-600 bg-sky-50 px-3 py-1 rounded-full border border-sky-200">
-            Live Civic Issue Map
-          </span>
+          <button
+            type="button"
+            onClick={handleLocateMe}
+            disabled={isLocating}
+            className="text-xs font-semibold text-sky-700 bg-sky-50 px-3 py-2 rounded-full border border-sky-200 hover:bg-sky-100 disabled:cursor-wait disabled:opacity-60"
+          >
+            {isLocating ? 'Finding Location...' : currentLocation ? 'Refresh My Location' : 'Show My Location'}
+          </button>
         </div>
 
         <InteractiveMap
           complaints={complaints}
           onSelectComplaint={handleSelectComplaint}
+          currentLocation={currentLocation}
           height="360px"
         />
       </div>

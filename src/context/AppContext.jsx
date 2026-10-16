@@ -16,6 +16,7 @@ export const AppProvider = ({ children }) => {
   const [complaints, setComplaints] = useState([]);
   const [selectedComplaintId, setSelectedComplaintId] = useState(null);
   const [notifications, setNotifications] = useState([]);
+  const [currentLocation, setCurrentLocation] = useState(null);
   const [dataLoading, setDataLoading] = useState(false);
   const [toast, setToast] = useState(null);
   
@@ -41,6 +42,7 @@ export const AppProvider = ({ children }) => {
   const logout = async () => {
     await authRequest('logout', {});
     setUser(null);
+    setCurrentLocation(null);
     setActiveTab('auth-login');
   };
 
@@ -122,7 +124,7 @@ export const AppProvider = ({ children }) => {
         publicImpact: formData.publicImpact || 'High',
         location: formData.location || 'Main Road, Near Bus Stop',
         description: formData.description || 'Civic infrastructure issue reported via CivicEye AI citizen app.',
-        coordinates: formData.coordinates || { lat: 12.9716, lng: 77.5946 }
+        coordinates: formData.coordinates
       }
     });
     setComplaints((previous) => [complaint, ...previous]);
@@ -216,6 +218,7 @@ export const AppProvider = ({ children }) => {
       selectedComplaintId, setSelectedComplaintId,
       currentSelectedComplaint,
       notifications, markAllNotificationsRead,
+      currentLocation, setCurrentLocation,
       toast, showToast,
       submitNewComplaint,
       assignIssue,

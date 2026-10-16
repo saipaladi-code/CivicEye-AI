@@ -1,16 +1,26 @@
 import React, { useEffect, useRef } from 'react';
-import { MapPin, AlertCircle, CheckCircle, Clock } from 'lucide-react';
 
-export const InteractiveMap = ({ complaints = [], onSelectComplaint, activeId, height = "400px" }) => {
+export const InteractiveMap = ({
+  complaints = [], onSelectComplaint, activeId, currentLocation, height = "400px"
+}) => {
   const mapContainerRef = useRef(null);
   const leafletMapRef = useRef(null);
 
   useEffect(() => {
-    // Initialize Leaflet Map if L is available in window
     if (typeof window !== 'undefined' && window.L && mapContainerRef.current) {
       if (!leafletMapRef.current) {
-        // Default center on sample coordinates (Bangalore smart city grid coordinates)
-        const map = window.L.map(mapContainerRef.current).setView([12.972, 77.595], 13);
+        const firstComplaint = complaints.find((item) => (
+          Number.isFinite(item.coordinates?.lat) && Number.isFinite(item.coordinates?.lng)
+        ));
+        const initialCenter = currentLocation
+          ? [currentLocation.lat, currentLocation.lng]
+          : firstComplaint
+            ? [firstComplaint.coordinates.lat, firstComplaint.coordinates.lng]
+            : [20, 0];
+        const map = window.L.map(mapContainerRef.current).setView(
+          initialCenter,
+          currentLocation || firstComplaint ? 13 : 2
+        );
         
         window.L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Street_Map/MapServer/tile/{z}/{y}/{x}', {
           attribution: 'Tiles &copy; Esri &mdash; Esri, HERE, Garmin, &copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors, and the GIS user community',
@@ -21,17 +31,27 @@ export const InteractiveMap = ({ complaints = [], onSelectComplaint, activeId, h
       }
 
       const map = leafletMapRef.current;
+      const firstComplaint = complaints.find((item) => (
+        Number.isFinite(item.coordinates?.lat) && Number.isFinite(item.coordinates?.lng)
+      ));
+      if (currentLocation && Number.isFinite(currentLocation.lat) && Number.isFinite(currentLocation.lng)) {
+        map.setView([currentLocation.lat, currentLocation.lng], 14);
+      } else if (firstComplaint) {
+        map.setView([firstComplaint.coordinates.lat, firstComplaint.coordinates.lng], 13);
+      }
 
-      // Clear existing markers
       map.eachLayer((layer) => {
         if (layer instanceof window.L.Marker) {
           map.removeLayer(layer);
         }
       });
 
-      // Add issue markers
       complaints.forEach((item) => {
-        if (item.coordinates && item.coordinates.lat && item.coordinates.lng) {
+        if (
+          item.coordinates &&
+          Number.isFinite(item.coordinates.lat) &&
+          Number.isFinite(item.coordinates.lng)
+        ) {
           const isHigh = item.priorityScore >= 70;
           const color = isHigh ? '#e11d48' : item.priorityScore >= 40 ? '#f59e0b' : '#10b981';
 
@@ -84,8 +104,19 @@ export const InteractiveMap = ({ complaints = [], onSelectComplaint, activeId, h
           });
         }
       });
+      if (currentLocation && Number.isFinite(currentLocation.lat) && Number.isFinite(currentLocation.lng)) {
+        const currentLocationIcon = window.L.divIcon({
+          className: 'current-location-pin',
+          html: '<div style="width:18px;height:18px;border-radius:50%;background:#2563eb;border:4px solid white;box-shadow:0 0 0 7px rgba(37,99,235,0.2),0 3px 10px rgba(0,0,0,0.35);"></div>',
+          iconSize: [18, 18],
+          iconAnchor: [9, 9]
+        });
+        window.L.marker([currentLocation.lat, currentLocation.lng], { icon: currentLocationIcon })
+          .bindPopup('<strong>Your current location</strong>')
+          .addTo(map);
+      }
     }
-  }, [complaints, activeId, onSelectComplaint]);
+  }, [complaints, activeId, currentLocation, onSelectComplaint]);
 
   return (
     <div className="relative w-full rounded-2xl overflow-hidden border border-slate-200 shadow-inner bg-slate-900" style={{ height }}>
@@ -107,6 +138,12 @@ export const InteractiveMap = ({ complaints = [], onSelectComplaint, activeId, h
           <span className="w-3 h-3 rounded-full bg-emerald-500 border border-white"></span>
           <span className="text-slate-600 font-medium">Low (&lt;40)</span>
         </div>
+        {currentLocation && (
+          <div className="flex items-center gap-1.5">
+            <span className="w-3 h-3 rounded-full bg-blue-600 border-2 border-white"></span>
+            <span className="text-slate-600 font-medium">You are here</span>
+          </div>
+        )}
       </div>
     </div>
   );
