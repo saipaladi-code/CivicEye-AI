@@ -11,6 +11,7 @@ const authCollections = [
           mobile: { bsonType: 'string', maxLength: 30 },
           passwordHash: { bsonType: 'string', pattern: '^\\$2[aby]\\$\\d{2}\\$.{53}$' },
           role: { enum: ['citizen', 'authority', 'worker', 'field_worker'] },
+          demoAccount: { bsonType: 'bool' },
           department: { bsonType: 'string', maxLength: 100 },
           employeeId: { bsonType: 'string', maxLength: 80 },
           workLocation: { bsonType: 'string', maxLength: 200 },
@@ -97,6 +98,8 @@ const authCollections = [
           assignedWorkerId: { bsonType: 'objectId' },
           assignmentHistory: { bsonType: 'array' },
           workerTaskStatus: { enum: ['Assigned', 'In Progress', 'Evidence Submitted', 'Rework Required', 'Approved'] },
+          demoData: { bsonType: 'bool' },
+          demoSeedKey: { bsonType: 'string', maxLength: 100 },
           evidenceSubmissions: { bsonType: 'array' },
           approvedEvidence: { bsonType: 'array' },
           assignmentInstructions: { bsonType: 'string', maxLength: 1000 },
@@ -108,6 +111,7 @@ const authCollections = [
     },
     indexes: [
       { key: { id: 1 }, options: { name: 'complaints_public_id_unique', unique: true } },
+      { key: { demoSeedKey: 1 }, options: { name: 'complaints_demo_seed_key', unique: true, sparse: true } },
       { key: { userId: 1, createdAt: -1 }, options: { name: 'complaints_citizen_created' } },
       { key: { status: 1, priorityScore: -1 }, options: { name: 'complaints_authority_queue' } },
       { key: { category: 1, createdAt: -1 }, options: { name: 'complaints_category_created' } }
@@ -176,6 +180,7 @@ export const ensureAuthCollections = async (db) => {
       if (matchingIndex) {
         const optionsMatch = (
           Boolean(matchingIndex.unique) === Boolean(index.options.unique) &&
+          Boolean(matchingIndex.sparse) === Boolean(index.options.sparse) &&
           (matchingIndex.expireAfterSeconds ?? null) === (index.options.expireAfterSeconds ?? null)
         );
         if (optionsMatch) continue;

@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import {
-  ArrowLeft, ArrowRight, Check, Eye, EyeOff, LockKeyhole, Mail,
+  ArrowLeft, ArrowRight, Check, Eye, EyeOff, HardHat, LockKeyhole, Loader2, Mail,
   MapPin, ShieldCheck, Sparkles, UserRound, Waves
 } from 'lucide-react';
 import { useApp } from '../../context/AppContext';
@@ -130,6 +130,8 @@ export const AuthPage = ({ blockedAccess = false, defaultAccountType = 'citizen'
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [demoRoleLoading, setDemoRoleLoading] = useState('');
+  const [demoMessage, setDemoMessage] = useState('');
   const [message, setMessage] = useState(null);
 
   const isSignup = mode === 'signup';
@@ -146,6 +148,32 @@ export const AuthPage = ({ blockedAccess = false, defaultAccountType = 'citizen'
   const changeMode = (nextMode) => {
     setMode(nextMode);
     setMessage(null);
+    setDemoMessage('');
+  };
+
+  const completeLogin = (authenticatedUser) => {
+    setUser(authenticatedUser);
+    setActiveTab(
+      authenticatedUser.role === 'authority'
+        ? 'authority-dashboard'
+        : ['worker', 'field_worker'].includes(authenticatedUser.role)
+          ? 'worker-dashboard'
+          : 'citizen-dashboard'
+    );
+  };
+
+  const handleDemoLogin = async (role) => {
+    if (isSubmitting || demoRoleLoading) return;
+    setDemoRoleLoading(role);
+    setDemoMessage('');
+    try {
+      const result = await authRequest('demo-login', { role });
+      completeLogin(result.user);
+    } catch (error) {
+      setDemoMessage(error.message);
+    } finally {
+      setDemoRoleLoading('');
+    }
   };
 
   const readProfileProof = (file) => new Promise((resolve, reject) => {
@@ -208,6 +236,7 @@ export const AuthPage = ({ blockedAccess = false, defaultAccountType = 'citizen'
         return;
       }
 
+      if (demoRoleLoading) return;
       const body = isSignup
         ? {
             fullName: formData.get('fullName'),
@@ -237,14 +266,7 @@ export const AuthPage = ({ blockedAccess = false, defaultAccountType = 'citizen'
         setMessage({ type: 'success', text: result.message });
         return;
       }
-      setUser(result.user);
-      setActiveTab(
-        result.user.role === 'authority'
-          ? 'authority-dashboard'
-          : ['worker', 'field_worker'].includes(result.user.role)
-            ? 'worker-dashboard'
-            : 'citizen-dashboard'
-      );
+      completeLogin(result.user);
     } catch (error) {
       setMessage({ type: 'error', text: error.message });
     } finally {
@@ -282,6 +304,48 @@ export const AuthPage = ({ blockedAccess = false, defaultAccountType = 'citizen'
             <ArrowLeft className="h-4 w-4" /> Back to CivicEye
           </button>
 
+          {mode === 'login' && (
+            <section className="auth-demo-section" aria-labelledby="auth-demo-title">
+              <div className="auth-demo-heading">
+                <div>
+                  <h2 id="auth-demo-title">Quick Demo Access</h2>
+                  <p>Explore CivicEye AI using demo accounts.</p>
+                </div>
+                <Sparkles className="h-5 w-5" aria-hidden="true" />
+              </div>
+              <div className="auth-demo-cards">
+                {[
+                  { role: 'citizen', label: 'Citizen Demo', Icon: UserRound, description: 'Explore reports and complaint tracking.' },
+                  { role: 'field_worker', label: 'Field Worker Demo', Icon: HardHat, description: 'Review an assigned sample task.' },
+                  { role: 'authority', label: 'Authority Demo', Icon: ShieldCheck, description: 'Manage demo reports and assignments.' }
+                ].map(({ role, label, Icon, description }) => (
+                  <button
+                    className="auth-demo-card"
+                    key={role}
+                    type="button"
+                    onClick={() => handleDemoLogin(role)}
+                    disabled={Boolean(demoRoleLoading) || isSubmitting}
+                    aria-label={`Sign in as ${label}`}
+                  >
+                    <span className="auth-demo-card-icon">
+                      {demoRoleLoading === role
+                        ? <Loader2 className="h-5 w-5 animate-spin" aria-hidden="true" />
+                        : <Icon className="h-5 w-5" aria-hidden="true" />}
+                    </span>
+                    <span className="auth-demo-card-title">{label}</span>
+                    <span className="auth-demo-card-description">{description}</span>
+                    {demoRoleLoading === role && <span className="sr-only">Signing in…</span>}
+                  </button>
+                ))}
+              </div>
+              {demoMessage && (
+                <div className="auth-message auth-message-warning auth-demo-message" role="alert" aria-live="polite">
+                  {demoMessage}
+                </div>
+              )}
+            </section>
+          )}
+
           <div className="auth-heading">
             <div className="auth-heading-icon"><Waves className="h-5 w-5" /></div>
             <h2>{isSignup ? 'Create your account' : isReset ? 'Reset your password' : 'Welcome Back'}</h2>
@@ -292,7 +356,7 @@ export const AuthPage = ({ blockedAccess = false, defaultAccountType = 'citizen'
                   ? 'Choose a new password for your account.'
                   : isResetRequest
                   ? 'Enter your email and we’ll help you get back in.'
-                  : 'Sign in to your CivicEye account.'}
+                  : 'Or sign in to your CivicEye account.'}
             </p>
           </div>
 
@@ -484,7 +548,7 @@ export const AuthPage = ({ blockedAccess = false, defaultAccountType = 'citizen'
               </div>
             )}
 
-            <button className="auth-submit" type="submit" disabled={isSubmitting}>
+            <button className="auth-submit" type="submit" disabled={isSubmitting || Boolean(demoRoleLoading)}>
               <span>{isSubmitting ? 'Please wait…' : isSignup ? 'Create Account' : isResetPassword ? 'Reset Password' : isResetRequest ? 'Send recovery instructions' : 'Sign In'}</span>
               {!isReset && <ArrowRight className="h-[18px] w-[18px]" />}
             </button>

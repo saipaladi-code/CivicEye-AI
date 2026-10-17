@@ -9,6 +9,9 @@
     "start": "node server.js",
     "preview": "node -e \"process.env.NODE_ENV='production'; import('./server.js')\"",
     "db:setup": "node scripts/setup-auth-database.js",
+    "demo:setup": "node scripts/provision-demo-accounts.js",
+    "demo:setup:authority": "node scripts/provision-demo-accounts.js --authority-only",
+    "demo:setup:authority-worker": "node scripts/provision-demo-accounts.js --authority-worker-only",
     "provision:authority": "node scripts/provision-authority.js",
     "provision:worker": "node scripts/provision-authority.js --worker"
   },

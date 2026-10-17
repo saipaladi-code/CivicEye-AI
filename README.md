@@ -60,6 +60,26 @@ Create or update the Atlas collections and indexes at any time with `npm run db:
 
 Citizens and field workers can register through the app. Field worker registrations are stored in the `users` collection with `role: "field_worker"` and `approvalStatus: "PENDING_APPROVAL"`; they cannot access the worker dashboard or task APIs until an authenticated municipal authority approves the application. Authorities can inspect submitted identity proof, approve or reject an application with a reason, or request more information from the **Field Worker Applications** section in the dashboard. Status and decision messages are available to applicants at sign-in and through in-app notifications after approval. Municipal Authority accounts cannot self-register and must still be provisioned by an administrator with `npm run provision:authority`. `npm run provision:worker` remains available for legacy/trusted worker accounts.
 
+### Quick demo access
+
+The login page offers Citizen, Field Worker, and Authority demo buttons. Demo access still authenticates against MongoDB through the normal bcrypt and HttpOnly-session flow. The demo authority is restricted server-side to marked demo complaints and demo worker accounts; it cannot inspect or modify real complaints or worker applications. Demo field-worker access requires an approved account and starts with a clearly labeled sample assignment. Seed records are only inserted or updated by the demo setup command; existing user accounts using the configured emails are never overwritten unless they are already marked as demo accounts with the matching role.
+
+To configure demo access, set the following server-side variables in the private `.env` file (or deployment environment): `DEMO_CITIZEN_EMAIL`, `DEMO_CITIZEN_PASSWORD`, `DEMO_FIELD_WORKER_EMAIL`, `DEMO_FIELD_WORKER_PASSWORD`, `DEMO_AUTHORITY_EMAIL`, and `DEMO_AUTHORITY_PASSWORD`. Use distinct email addresses and passwords of 8–128 characters. Keep them out of frontend/Vite variables and source control. If these values are absent or the accounts have not been seeded, the login page explains that an administrator must configure the demo accounts.
+
+After configuring all three role credentials, run `npm run demo:setup` from a trusted terminal. The repeatable script hashes the passwords with bcrypt, provisions an approved demo field worker linked to the demo authority, and upserts one clearly identified sample complaint assigned to that worker. Rerunning resets that sample task to its assigned starting state; it does not delete collections, remove unrelated records, or modify non-demo accounts.
+
+To provision only the authority account, set `DEMO_AUTHORITY_EMAIL` and `DEMO_AUTHORITY_PASSWORD`, then run `npm run demo:setup:authority`. This creates the account but does not create sample complaints or worker accounts; configure the remaining role credentials and run the full setup to populate the demo workflow. Restart the server after changing environment variables.
+
+If the citizen demo email is already used by a non-demo account, leave that account unchanged and use unused emails for the authority and worker with `npm run demo:setup:authority-worker`. This provisions only those two demo accounts; add an unused citizen demo email and run the full `npm run demo:setup` command to seed the sample complaint and make all three demo roles ready.
+
+For a demonstration, click each role card on the login page:
+
+- **Citizen Demo** opens the Citizen Dashboard with clearly labeled sample complaint data and complaint tracking.
+- **Field Worker Demo** opens the Field Worker Dashboard with the approved demo sample assignment and existing evidence workflow.
+- **Authority Demo** opens the Authority Dashboard with only clearly marked demo complaints and demo field-worker accounts in its server-side scope.
+
+All three demo sessions use the existing logout control. To verify permissions, try accessing a different role's dashboard/API while signed in; the existing role checks must reject the request. Normal email/password login, registration, password reset, and worker approval continue to use their existing flows.
+
 Worker completion photos are stored in MongoDB GridFS and uploaded through the authenticated server API; no separate Blob storage token is required. Evidence file URLs are served through authenticated API routes and are visible to citizens only after approval.
 
 For MongoDB Atlas, also allowlist the server's IP in **Network Access** and grant the database user access only to the CivicEye database. Rotate any database password that has been shared in chat or screenshots, then update the local `.env` and restart the server.

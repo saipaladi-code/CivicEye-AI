@@ -25,6 +25,11 @@ const defaultSessionDays = 7;
 const persistentSessionDays = 30;
 const here = path.dirname(fileURLToPath(import.meta.url));
 const dummyPasswordHash = bcrypt.hash(crypto.randomBytes(32).toString('hex'), 12);
+const demoRoles = {
+  citizen: { email: 'DEMO_CITIZEN_EMAIL', password: 'DEMO_CITIZEN_PASSWORD', accountType: 'citizen' },
+  field_worker: { email: 'DEMO_FIELD_WORKER_EMAIL', password: 'DEMO_FIELD_WORKER_PASSWORD', accountType: 'field_worker' },
+  authority: { email: 'DEMO_AUTHORITY_EMAIL', password: 'DEMO_AUTHORITY_PASSWORD', accountType: 'authority' }
+};
 
 let databasePromise;
 
@@ -60,6 +65,8 @@ const requireAuthority = (req, res, next) => {
 };
 
 const isFieldWorker = (user) => ['worker', 'field_worker'].includes(user?.role);
+const isDemoAccount = (user) => user?.demoAccount === true;
+const isDemoAuthority = (user) => user?.role === 'authority' && isDemoAccount(user);
 const isApprovedFieldWorker = (user) => (
   isFieldWorker(user) &&
   (user.approvalStatus === 'APPROVED' || (user.role === 'worker' && !user.approvalStatus))
@@ -398,11 +405,20 @@ app.post('/api/auth/register', requireSameOrigin, authLimiter, async (req, res) 
   return res.status(201).json({ user: publicUser(user) });
 });
 
-app.post('/api/auth/login', requireSameOrigin, authLimiter, async (req, res) => {
-  const { email, password, remember = false, accountType = 'citizen' } = req.body || {};
+const loginWithCredentials = async ({
+  email,
+  password,
+  remember = false,
+  accountType = 'citizen',
+  demoLogin = false
+}, res) => {
   const normalizedEmail = typeof email === 'string' ? email.trim().toLowerCase() : '';
   if (!emailIsValid(normalizedEmail) || typeof password !== 'string' || password.length > 128) {
-    return res.status(400).json({ error: 'Enter a valid email address and password.' });
+    return res.status(400).json({
+      error: demoLogin
+        ? 'Demo access is not configured. Ask the CivicEye administrator to run npm run demo:setup.'
+        : 'Enter a valid email address and password.'
+    });
   }
   if (!['citizen', 'authority', 'worker', 'field_worker'].includes(accountType)) {
     return res.status(400).json({ error: 'Select a valid account type.' });
@@ -418,10 +434,19 @@ app.post('/api/auth/login', requireSameOrigin, authLimiter, async (req, res) => 
     user.role === accountType ||
     (['worker', 'field_worker'].includes(accountType) && isFieldWorker(user))
   );
-  if (!user || !passwordMatches || !roleMatches) {
-    return res.status(401).json({ error: 'Email, password, or account type is incorrect.' });
+  if (!user || !passwordMatches || !roleMatches || (demoLogin && !isDemoAccount(user))) {
+    return res.status(demoLogin ? 503 : 401).json({
+      error: demoLogin
+        ? 'This demo account is unavailable. Ask the CivicEye administrator to run npm run demo:setup.'
+        : 'Email, password, or account type is incorrect.'
+    });
   }
   if (isFieldWorker(user) && !isApprovedFieldWorker(user)) {
+    if (demoLogin) {
+      return res.status(503).json({
+        error: 'The demo field worker has not been approved. Ask the CivicEye administrator to rerun npm run demo:setup.'
+      });
+    }
     if (user.approvalStatus === 'REJECTED') {
       const rejectionReason = user.rejectionReason || 'No reason was provided.';
       return res.status(403).json({
@@ -446,6 +471,33 @@ app.post('/api/auth/login', requireSameOrigin, authLimiter, async (req, res) => 
 
   await createSession(user, remember === true, res);
   return res.status(200).json({ user: publicUser(user) });
+};
+
+app.post('/api/auth/login', requireSameOrigin, authLimiter, async (req, res) => {
+  const { email, password, remember, accountType } = req.body || {};
+  return loginWithCredentials({ email, password, remember, accountType }, res);
+});
+
+app.post('/api/auth/demo-login', requireSameOrigin, authLimiter, async (req, res) => {
+  const requestedRole = req.body?.role;
+  const config = typeof requestedRole === 'string' && Object.hasOwn(demoRoles, requestedRole)
+    ? demoRoles[requestedRole]
+    : null;
+  if (!config) return res.status(400).json({ error: 'Select a valid demo role.' });
+  const email = process.env[config.email];
+  const password = process.env[config.password];
+  if (!emailIsValid(typeof email === 'string' ? email.trim().toLowerCase() : '') ||
+      typeof password !== 'string' || password.length < 8 || password.length > 128) {
+    return res.status(503).json({
+      error: 'Demo access is not configured. Ask the CivicEye administrator to configure server-side demo credentials and run npm run demo:setup.'
+    });
+  }
+  return loginWithCredentials({
+    email,
+    password,
+    accountType: config.accountType,
+    demoLogin: true
+  }, res);
 });
 
 app.get('/api/auth/me', resolveUser, (req, res) => {
@@ -539,10 +591,13 @@ app.post('/api/auth/reset-password', requireSameOrigin, authLimiter, async (req,
   return res.status(200).json({ message: 'Your password was reset. Sign in with your new password.' });
 });
 
-app.get('/api/admin/worker-applications', resolveUser, requireAuthenticatedUser, requireAuthority, async (_req, res) => {
+app.get('/api/admin/worker-applications', resolveUser, requireAuthenticatedUser, requireAuthority, async (req, res) => {
   const db = await getDatabase();
   const applications = await db.collection('users')
-    .find({ role: 'field_worker' }, {
+    .find({
+      role: 'field_worker',
+      ...(isDemoAuthority(req.user) ? { demoAccount: true } : {})
+    }, {
       projection: {
         passwordHash: 0,
         'profileProof.data': 0
@@ -574,7 +629,11 @@ app.get('/api/admin/worker-applications', resolveUser, requireAuthenticatedUser,
 app.get('/api/admin/worker-applications/:id', resolveUser, requireAuthenticatedUser, requireAuthority, async (req, res) => {
   if (!ObjectId.isValid(req.params.id)) return res.status(400).json({ error: 'Application ID is invalid.' });
   const application = await (await getDatabase()).collection('users').findOne(
-    { _id: new ObjectId(req.params.id), role: 'field_worker' },
+    {
+      _id: new ObjectId(req.params.id),
+      role: 'field_worker',
+      ...(isDemoAuthority(req.user) ? { demoAccount: true } : {})
+    },
     { projection: { passwordHash: 0 } }
   );
   if (!application) return res.status(404).json({ error: 'Field worker application not found.' });
@@ -625,7 +684,8 @@ app.patch('/api/admin/worker-applications/:id', requireSameOrigin, resolveUser, 
   const application = await db.collection('users').findOne({
     _id: applicationId,
     role: 'field_worker',
-    approvalStatus: 'PENDING_APPROVAL'
+    approvalStatus: 'PENDING_APPROVAL',
+    ...(isDemoAuthority(req.user) ? { demoAccount: true } : {})
   });
   if (!application) return res.status(409).json({ error: 'This application is no longer awaiting a decision.' });
 
@@ -669,7 +729,12 @@ app.patch('/api/admin/worker-applications/:id', requireSameOrigin, resolveUser, 
     notificationMessage = `Please update your application: ${message.trim()}`;
   }
   const result = await db.collection('users').findOneAndUpdate(
-    { _id: applicationId, role: 'field_worker', approvalStatus: 'PENDING_APPROVAL' },
+    {
+      _id: applicationId,
+      role: 'field_worker',
+      approvalStatus: 'PENDING_APPROVAL',
+      ...(isDemoAuthority(req.user) ? { demoAccount: true } : {})
+    },
     update,
     { returnDocument: 'after', projection: { passwordHash: 0, 'profileProof.data': 0 } }
   );
@@ -698,7 +763,7 @@ app.patch('/api/admin/worker-applications/:id', requireSameOrigin, resolveUser, 
 app.get('/api/data/bootstrap', resolveUser, requireAuthenticatedUser, requireApprovedFieldWorker, async (req, res) => {
   const db = await getDatabase();
   const complaintFilter = req.user.role === 'authority'
-    ? {}
+    ? (isDemoAuthority(req.user) ? { demoData: true } : {})
     : isFieldWorker(req.user)
       ? { assignedWorkerId: req.user._id }
       : { userId: req.user._id };
@@ -772,7 +837,10 @@ app.post('/api/data/complaints', requireSameOrigin, resolveUser, requireAuthenti
 
   const db = await getDatabase();
   const matchingComplaints = await db.collection('complaints')
-    .find({ category: category.trim() }, { projection: { category: 1, location: 1 } })
+    .find({
+      category: category.trim(),
+      ...(isDemoAccount(req.user) ? { demoData: true } : {})
+    }, { projection: { category: 1, location: 1 } })
     .toArray();
   const duplicateResult = checkForDuplicates(category.trim(), location.trim(), matchingComplaints);
   const verifiedDuplicateCount = duplicateResult.count;
@@ -824,6 +892,7 @@ app.post('/api/data/complaints', requireSameOrigin, resolveUser, requireAuthenti
   await db.collection('complaints').insertOne({
     ...complaint,
     userId: req.user._id,
+    ...(isDemoAccount(req.user) ? { demoData: true } : {}),
     createdAt: now
   });
   await createNotification(
@@ -849,10 +918,14 @@ app.patch('/api/data/complaints/:id/assignment', requireSameOrigin, resolveUser,
 
   const db = await getDatabase();
   const [complaint, worker] = await Promise.all([
-    db.collection('complaints').findOne({ id: req.params.id }),
+    db.collection('complaints').findOne({
+      id: req.params.id,
+      ...(isDemoAuthority(req.user) ? { demoData: true } : {})
+    }),
     db.collection('users').findOne({
       _id: new ObjectId(workerId),
       role: { $in: ['worker', 'field_worker'] },
+      demoAccount: isDemoAuthority(req.user) ? true : { $ne: true },
       $or: [
         { approvalStatus: 'APPROVED' },
         { role: 'worker', approvalStatus: { $exists: false } }
@@ -881,7 +954,11 @@ app.patch('/api/data/complaints/:id/assignment', requireSameOrigin, resolveUser,
   };
   const timeline = updateComplaintTimeline(complaint, 'Assigned', `Assigned to ${department.trim()} (${worker.fullName})`);
   const result = await db.collection('complaints').findOneAndUpdate(
-    { id: complaint.id, status: { $nin: ['Resolved', 'Evidence Submitted'] } },
+    {
+      id: complaint.id,
+      status: { $nin: ['Resolved', 'Evidence Submitted'] },
+      ...(isDemoAuthority(req.user) ? { demoData: true } : {})
+    },
     {
       $set: {
         status: 'Assigned',
@@ -913,7 +990,10 @@ app.patch('/api/data/complaints/:id/status', requireSameOrigin, resolveUser, req
     return res.status(400).json({ error: 'Only Submitted or Verified can be set directly. Assignment and resolution require the field workflow.' });
   }
   const db = await getDatabase();
-  const complaint = await db.collection('complaints').findOne({ id: req.params.id });
+  const complaint = await db.collection('complaints').findOne({
+    id: req.params.id,
+    ...(isDemoAuthority(req.user) ? { demoData: true } : {})
+  });
   if (!complaint) return res.status(404).json({ error: 'Complaint not found.' });
   const timeline = updateComplaintTimeline(complaint, status, `Status updated to ${status}`);
   const result = await db.collection('complaints').findOneAndUpdate(
@@ -930,10 +1010,11 @@ app.patch('/api/data/complaints/:id/resolve', requireSameOrigin, resolveUser, re
   res.status(403).json({ error: 'Complaints can only be resolved by approving submitted field-worker evidence.' })
 ));
 
-app.get('/api/workflow/workers', resolveUser, requireAuthenticatedUser, requireAuthority, async (_req, res) => {
+app.get('/api/workflow/workers', resolveUser, requireAuthenticatedUser, requireAuthority, async (req, res) => {
   const workers = await (await getDatabase()).collection('users')
     .find({
       role: { $in: ['worker', 'field_worker'] },
+      demoAccount: isDemoAuthority(req.user) ? true : { $ne: true },
       $or: [
         { approvalStatus: 'APPROVED' },
         { role: 'worker', approvalStatus: { $exists: false } }
@@ -955,7 +1036,10 @@ app.get('/api/workflow/evidence', resolveUser, requireAuthenticatedUser, require
     return res.status(400).json({ error: 'Evidence reference is invalid.' });
   }
   const db = await getDatabase();
-  const complaint = await db.collection('complaints').findOne({ id: complaintId });
+  const complaint = await db.collection('complaints').findOne({
+    id: complaintId,
+    ...(isDemoAuthority(req.user) ? { demoData: true } : {})
+  });
   if (!complaint) return res.status(404).json({ error: 'Complaint not found.' });
   const submission = (complaint.evidenceSubmissions || []).find((item) => item.id === submissionId);
   const photo = submission?.photos?.find((item) => item.id === photoId);
@@ -1163,7 +1247,10 @@ app.post('/api/workflow/:action', requireSameOrigin, resolveUser, requireAuthent
       { returnDocument: 'after' }
     );
     if (!result) return res.status(409).json({ error: 'Task status changed before submission. Refresh and try again.' });
-    const authorities = await db.collection('users').find({ role: 'authority' }, { projection: { _id: 1 } }).toArray();
+    const authorities = await db.collection('users').find({
+      role: 'authority',
+      ...(isDemoAccount(req.user) ? { demoAccount: true } : {})
+    }, { projection: { _id: 1 } }).toArray();
     await Promise.all([
       ...authorities.map((authority) => createNotification(db, authority._id, 'Evidence Ready for Review', `${complaint.id} is awaiting completion evidence review.`, complaint.id)),
       createNotification(db, req.user._id, 'Evidence Submitted', `Your evidence for ${complaint.id} was submitted for approval.`, complaint.id)
@@ -1178,7 +1265,11 @@ app.post('/api/workflow/:action', requireSameOrigin, resolveUser, requireAuthent
     if (decision === 'reject' && (typeof reason !== 'string' || reason.trim().length < 3 || reason.length > 1000)) {
       return res.status(400).json({ error: 'Enter a rejection reason between 3 and 1000 characters.' });
     }
-    const complaint = await db.collection('complaints').findOne({ id: complaintId, workerTaskStatus: 'Evidence Submitted' });
+    const complaint = await db.collection('complaints').findOne({
+      id: complaintId,
+      workerTaskStatus: 'Evidence Submitted',
+      ...(isDemoAuthority(req.user) ? { demoData: true } : {})
+    });
     if (!complaint) return res.status(409).json({ error: 'No evidence is currently awaiting review for this complaint.' });
     const submission = [...(complaint.evidenceSubmissions || [])].reverse().find((item) => item.status === 'Submitted');
     if (!submission) return res.status(409).json({ error: 'No pending evidence submission was found.' });
@@ -1213,7 +1304,11 @@ app.post('/api/workflow/:action', requireSameOrigin, resolveUser, requireAuthent
       }
     }
     const result = await db.collection('complaints').findOneAndUpdate(
-      { _id: complaint._id, workerTaskStatus: 'Evidence Submitted' },
+      {
+        _id: complaint._id,
+        workerTaskStatus: 'Evidence Submitted',
+        ...(isDemoAuthority(req.user) ? { demoData: true } : {})
+      },
       {
         $set: {
           evidenceSubmissions,
